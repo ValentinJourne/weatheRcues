@@ -3,10 +3,34 @@ library(climwin)
 library(broom)
 library(mgcv)
 
+#for maps 
+library(sf)
+library("rworldmap")
+library("rworldxtra")
+require(rgdal)
+library(ggspatial)
+library(ggsci)
+
 
 source('utils.R')
 source('method_CSP.R')
 source('method_climwin.R')
+source('method_signal.R')
+
+# I am generating calendar 
+calendar = goingbackpastdayscalendar(refday = 305,
+                                     lastdays = max(range), 
+                                     yearback = 2) %>% 
+  filter(YEAR == 1950) %>% 
+  dplyr::select(MONTHab, DOY, days.reversed) %>% 
+  mutate(datefake  = as.Date(DOY, origin = "1948-01-01"),
+         day.month = format(datefake,"%m-%d"), 
+         year = case_when(
+           days.reversed < 366 ~ 1,
+           days.reversed >= 366 & days.reversed < 730 ~ 2,
+           days.reversed >= 730 & days.reversed < 1095 ~ 3,
+           TRUE ~ 4))
+
 initial.data.mastree <- read.csv('/Users/vjourne/Library/CloudStorage/Dropbox/Mastree/MASTREEplus_2022-02-03_V1.csv',stringsAsFactors = F)
 
 #load data from JJ Foest, last V2 version 
@@ -45,12 +69,7 @@ seed.production.plot = Fagus.seed %>%
   ggpubr::theme_pubr()+
   ylab('Seed production (log)')
 
-library(sf)
-library("rworldmap")
-library("rworldxtra")
-require(rgdal)
-library(ggspatial)
-library(ggsci)
+
 plot_locations<- st_as_sf(Fagus.seed %>% 
                             dplyr::select(Longitude, Latitude, plotname.lon.lat, Collection_method) %>% distinct(), coords = c("Longitude", "Latitude")) %>% 
   st_set_crs(4326)
@@ -124,7 +143,7 @@ if(run.climwin==T){
       data = Fagus.seed %>% 
         filter(plotname.lon.lat == .x),  # Use .x correctly here
       site.name = .x,
-      range = c(600, 0),
+      range = range,
       cinterval = 'day',
       refday = c(01, 11),
       optionwindows = 'absolute',
@@ -140,18 +159,7 @@ if(run.climwin==T){
 mean(statistics_absolute_climwin$WindowOpen)
 mean(statistics_absolute_climwin$WindowClose)
 #159-427
-calendar = goingbackpastdayscalendar(refday = 305,
-                          lastdays = max(range), 
-                          yearback = 2) %>% 
-  filter(YEAR == 1950) %>% 
-  dplyr::select(MONTHab, DOY, days.reversed) %>% 
-  mutate(datefake  = as.Date(DOY, origin = "1948-01-01"),
-         day.month = format(datefake,"%m-%d"), 
-         year = case_when(
-           days.reversed < 366 ~ 1,
-           days.reversed >= 366 & days.reversed < 730 ~ 2,
-           days.reversed >= 730 & days.reversed < 1095 ~ 3,
-           TRUE ~ 4))
+
 
 climwin.dd = statistics_absolute_climwin %>% 
   dplyr::select(sitenewname, WindowOpen, WindowClose) %>% 
@@ -200,11 +208,13 @@ ggplot(results.moving.site)+
 
 #create 61 list - 1 per site 
 Results_CSP = results.moving.site %>%
-  group_by(sitenewname) %>%
+  arrange(plotname.lon.lat) %>% 
+  group_by(plotname.lon.lat) %>%
   group_split()
 
 nameCSP =   results.moving.site %>% 
-  group_by(sitenewname) %>%
+  arrange(plotname.lon.lat) %>% 
+  group_by(plotname.lon.lat) %>%
   group_keys()
 
 # Set names of the list based on group keys
@@ -217,140 +227,33 @@ lastdays = max(range)
 myform.fin = formula('log.seed ~ mean.temperature')
 refday = 305
 
+names(Results_CSP)
 
 
-for(i in 1:length(Results_CSP)){
-  #subset the data, 
-  #scale seed production and do logit transformation (will use this logit for climwin later)
-  tible.sitelevel = Fagus.seed %>% #site = bio_data 
-    dplyr::filter(plotname.lon.lat == unique(Results_CSP[[i]]$plotname.lon.lat))
+t = NULL
+for(i in 1:length(Results_CSP)){#
+  #Results_CSP
+  #i=20
+  Results_CSPsub = Results_CSP[[i]]
+  siteneame.forsub = unique(Results_CSP[[i]]$plotname.lon.lat)
   
-  #now make subset and run regression
-  list_slope <- as.list(Results_CSP[[i]]$estimate)
-  list_rs <- as.list(Results_CSP[[i]]$r.squared)
+  data.sub.fagus = Fagus.seed %>% #site = bio_data 
+    dplyr::filter(plotname.lon.lat == siteneame.forsub)
   
-  day = seq(rollwin,(lastdays-1),1)
-  slope = list_slope
-  r_s = list_rs
-  #k = nrow(site)
-  temporary <- data.frame(slope = unlist(slope), 
-                          day = day, 
-                          r_s = unlist(r_s))
-  #use the function to optimize k 
-  results <- optimize_and_fit_gam(temporary, optim.k = F, plots = F, k = (nrow(tible.sitelevel)-1) ) #(12+6) #I will specify just number of month 
-  #one year and 6 month for 1.5 years 
-  #get days windows 
-  #need to add rollwin because it start at 1... 
-  days = get_predictions_windows(slope_gam = results[[1]], 
-                                 rs_gam = results[[2]], 
-                                 temporary)$days
-  
-  sequences_days = extract_consecutive_sequences(days, keep_all = TRUE)
-    
-
-  
-  #get the climate id
-  # Climate load and format
-  # climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = unique(Results_CSP[[i]]$plotname.lon.lat))
-  # # Reformat the climate data
-  # climate_csv <- read_csv(climate_beech_unique, col_types = cols(...1 = col_skip())) %>%
-  #   mutate(Tmean = base::scale(Tmean),
-  #          Prp = base::scale(Prp),
-  #          across(c(Tmean, Prp), as.vector),
-  #          date = as.Date(paste0(day,'/',month,'/', year), format = "%d/%m/%Y"),
-  #          yday = lubridate::yday(date))
-  climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = unique(Results_CSP[[i]]$plotname.lon.lat))
-  
-  
-  climate_csv <- qs::qread(climate_beech_unique) %>%
-    as.data.frame() %>%
-    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-    mutate(date = foo(DATEB, 1949)) %>%
-    mutate(yday = lubridate::yday(date)) %>%
-    mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-    mutate(TMEAN = as.numeric(TMEAN),
-           TMAX = as.numeric(TMAX),
-           TMIN = as.numeric(TMIN),
-           PRP = as.numeric(PRP)) %>%
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
-  
-  # Define the year period
-  yearneed <- 2
-  yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
-  
-  
-  # Apply the function across all years in yearperiod and combine results
-  #here the map dfr will basically do same as aplly by runing the function over all the time period we want 
-  rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
-                                      climate = climate_csv, 
-                                      yearneed = yearneed, 
-                                      refday = 305, 
-                                      lastdays = lastdays, 
-                                      rollwin = 1, 
-                                      variablemoving = 'TMEAN')
-  
-  window_ranges_df <- save_window_ranges(sequences_days) %>% 
-    mutate(windows.sequences.number = 1:nrow(.))
-  
-
-  #now for me makes an uggly loop
-  # Initialize a list to store climate data for each window
-  #climate_windows_best_list <- list()
-  
-  # Loop through each window range in window_ranges_df
-  #i need to do this because sometimes the algo identify more sequences of days 
-  for (z in 1:nrow(window_ranges_df)) {
-    windowsopen <- window_ranges_df$windowsopen[z]
-    windowsclose <- window_ranges_df$windowsclose[z]
-    window_number <- window_ranges_df$windows.sequences.number[z]
-    
-    # Filter the rolling temperature data according to the current window range
-    climate_windows_best <- rolling.temperature.data %>%
-      dplyr::filter(days.reversed <= windowsopen & days.reversed >= windowsclose) %>%
-      group_by(LONGITUDE, LATITUDE, year) %>%
-      summarise(mean.temperature = mean(rolling_avg_tmean, na.rm = TRUE)) %>%
-      ungroup() %>%
-      mutate(window_number = window_number)  # Add the window number for identification
-    
-    #need to change year colnames :( 
-    fit.best.model = tible.sitelevel %>% 
-      rename(year = Year) %>% 
-      left_join(climate_windows_best) %>%
-      lm(myform.fin, data = .)
-    
-    intercept = tidy(fit.best.model)$estimate[1]
-    intercept.se = tidy(fit.best.model)$std.error[1]
-    estimate.model = tidy(fit.best.model)$estimate[2]
-    estimate.se.model = tidy(fit.best.model)$std.error[2]
-    pvalue.model = tidy(fit.best.model)$p.value[2]
-    r2 = glance(fit.best.model)$r.squared
-    AIC = glance(fit.best.model)$AIC
-    nobs = glance(fit.best.model)$nobs
-    nsequence.id = z
-    
-    output_fit_summary.temp <- data.frame(sitenewname = unique(Results_CSP[[i]]$sitenewname),
-                                          plotname.lon.lat = unique(Results_CSP[[i]]$plotname.lon.lat),
-                                          reference.day = refday,
-                                          windows.size = rollwin,
-                                          knots.number = results$k,
-                                          window.open = windowsopen,
-                                          window.close = windowsclose,
-                                          intercept = intercept,
-                                          intercept.se = intercept.se,
-                                          estimate = estimate.model,
-                                          estimate.se = estimate.se.model,
-                                          pvalue = pvalue.model,
-                                          r2 = r2,
-                                          AIC = AIC,
-                                          nobs = nobs,
-                                          nsequence.id = nsequence.id)
-    output_fit_summary = rbind(output_fit_summary, output_fit_summary.temp)
-    
-  }
+  ttt = runing_csp_site(Results_CSPsub = Results_CSPsub,
+                        data = data.sub.fagus,
+                        siteneame.forsub = siteneame.forsub,
+                        climate.beech.path = climate.beech.path,
+                        refday = 305,
+                        lastdays = max(range),
+                        rollwin = 1)
+  t = rbind(t, ttt)
 }
 
-output_fit_summary.best.csp = output_fit_summary %>%
+
+
+
+output_fit_summary.best.csp = t %>%
   group_by(sitenewname) %>% 
   dplyr::slice(which.max(r2))
 
@@ -1149,3 +1052,79 @@ temporary <- data.frame(sitenewname = unique(Results_CSP[[1]]$sitenewname),
 #                                    plot = TRUE)
 # 
 # # 
+
+# for(i in 1:length(Results_CSP)){
+#   #subset the data, 
+#   #scale seed production and do logit transformation (will use this logit for climwin later)
+#   tible.sitelevel = Fagus.seed %>% #site = bio_data 
+#     dplyr::filter(plotname.lon.lat == unique(Results_CSP[[i]]$plotname.lon.lat))
+#   
+#   
+#   #now make subset and run regression
+#   list_slope <- as.list(Results_CSP[[i]]$estimate)
+#   list_rs <- as.list(Results_CSP[[i]]$r.squared)
+#   
+#   day = seq(rollwin,(lastdays-1),1)
+#   slope = list_slope
+#   r_s = list_rs
+#   #k = nrow(site)
+#   temporary <- data.frame(slope = unlist(slope), 
+#                           day = day, 
+#                           r_s = unlist(r_s))
+#   #use the function to optimize k 
+#   results <- optimize_and_fit_gam(temporary, optim.k = F, plots = F, k = (nrow(tible.sitelevel)-1) ) #(12+6) #I will specify just number of month 
+#   #one year and 6 month for 1.5 years 
+#   #get days windows 
+#   #need to add rollwin because it start at 1... 
+#   days = get_predictions_windows(slope_gam = results[[1]], 
+#                                  rs_gam = results[[2]], 
+#                                  temporary)$days
+#   
+#   sequences_days = extract_consecutive_sequences(days, keep_all = TRUE)
+#   
+#   
+#   
+#   climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = unique(Results_CSP[[i]]$plotname.lon.lat))
+#   
+#   
+#   climate_csv <- qs::qread(climate_beech_unique) %>%
+#     as.data.frame() %>%
+#     mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
+#     mutate(date = foo(DATEB, 1949)) %>%
+#     mutate(yday = lubridate::yday(date)) %>%
+#     mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
+#     mutate(TMEAN = as.numeric(TMEAN),
+#            TMAX = as.numeric(TMAX),
+#            TMIN = as.numeric(TMIN),
+#            PRP = as.numeric(PRP)) %>%
+#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
+#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
+#   
+#   # Define the year period
+#   yearneed <- 2
+#   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
+#   
+#   
+#   # Apply the function across all years in yearperiod and combine results
+#   #here the map dfr will basically do same as aplly by runing the function over all the time period we want 
+#   rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
+#                                       climate = climate_csv, 
+#                                       yearneed = yearneed, 
+#                                       refday = refday, 
+#                                       lastdays = lastdays, 
+#                                       rollwin = rollwin, 
+#                                       variablemoving = 'TMEAN')
+#   
+#   window_ranges_df <- save_window_ranges(sequences_days) %>% 
+#     mutate(windows.sequences.number = 1:nrow(.))
+#   
+#   
+#   # Loop through each window range in window_ranges_df
+#   #i need to do this because sometimes the algo identify more sequences of days 
+#   # Replacing the for loop with map_dfr for optimization
+#   
+#   output_fit_summary.temp <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = tible.sitelevel, 
+#                                                                                            rolling.temperature.data = rolling.temperature.data))
+#   output_fit_summary = rbind(output_fit_summary, output_fit_summary.temp)
+# }
+# 

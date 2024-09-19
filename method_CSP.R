@@ -439,3 +439,111 @@ FULL.moving.climate.analysis <- function(Fagus.seed = Fagus.seed,
   
   return(results.moving)
 }
+
+#note here it is additional function to extract best windows identified by CSP method
+#' Run Climate Signal Processing for a Site
+#'
+#' This function processes climate signal data for a specific site by fitting a generalized additive model (GAM) and running window-based modeling.
+#'
+#' @param Results_CSPsub A subset of the `Results_CSP` data frame for a specific site. 
+#' @param data A data frame containing site-level data, typically including seed production and climate-related variables.
+#' @param siteneame.forsub A string representing the name of the site to subset from the `Results_CSP` data and climate data.
+#' @param climate.beech.path A string specifying the file path to the folder containing the climate data files.
+#' @param refday An integer specifying the reference day (default is 305).
+#' @param lastdays An integer representing the last day of the range used for the analysis (default is the maximum of the range).
+#' @param rollwin An integer specifying the size of the rolling window used for calculating temperature averages (default is 1).
+#'
+#' @return A data frame (`output_fit_summary.temp`) containing the results of the climate signal processing, including fitted model coefficients, model statistics, and window ranges.
+#'
+#' @details 
+#' The function processes climate signal data for a specific site by running the following steps:
+#' \itemize{
+#'   \item It extracts slopes and R-squared values from `Results_CSPsub` and constructs a temporary data frame for further analysis.
+#'   \item It fits a generalized additive model (GAM) to the slopes and R-squared values using the `optimize_and_fit_gam` function.
+#'   \item It identifies consecutive sequences of significant days (`extract_consecutive_sequences`) and generates window ranges.
+#'   \item It loads the climate data for the site from the specified path, formats the dates, and scales the climate variables.
+#'   \item It computes rolling temperature data for the selected time period.
+#'   \item It applies the `reruning_windows_modelling` function across all identified window ranges to model the relationship between seed production and climate variables.
+#' }
+#' 
+#' @note The function assumes that the `data` argument corresponds to the site-level data and contains a column named `plotname.lon.lat` for site identification.
+#'
+#' @examples
+#' \dontrun{
+#' # Example usage:
+#' output <- runing_csp_site(Results_CSPsub = Results_CSP[i],
+#'                           data = Fagus.seed,
+#'                           siteneame.forsub = "site_123",
+#'                           climate.beech.path = "/path/to/climate/data")
+#' }
+#'
+#' @import dplyr
+#' @import qs
+#' @import purrr
+#' @import lubridate
+#' @export
+runing_csp_site = function(Results_CSPsub = Results_CSPsub,
+                           data = data,
+                           siteneame.forsub = siteneame.forsub,
+                           climate.beech.path = climate.beech.path,
+                           refday = 305,
+                           lastdays = max(range),
+                           rollwin = 1){
+  
+  
+  list_slope <- as.list(Results_CSPsub$estimate)
+  list_rs <- as.list(Results_CSPsub$r.squared)
+  
+  day = seq(rollwin,(lastdays-1),1)
+  slope = list_slope
+  r_s = list_rs
+  #k = nrow(site)
+  temporary <- data.frame(slope = unlist(slope), 
+                          day = day, 
+                          r_s = unlist(r_s))
+  
+  results <- optimize_and_fit_gam(temporary, optim.k = F, plots = F, k = (nrow(data)-1) ) #(12+6) #I will specify just number of month 
+  
+  days = get_predictions_windows(slope_gam = results[[1]], 
+                                 rs_gam = results[[2]], 
+                                 temporary)$days
+  sequences_days = extract_consecutive_sequences(days, keep_all = TRUE)
+  window_ranges_df <- save_window_ranges(sequences_days) %>% 
+    mutate(windows.sequences.number = 1:nrow(.))
+  
+  climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = siteneame.forsub)
+  
+  if((siteneame.forsub == unique(data$plotname.lon.lat))==F){
+    stop()
+  }
+  
+  climate_csv <- qs::qread(climate_beech_unique) %>%
+    as.data.frame() %>%
+    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
+    mutate(date = foo(DATEB, 1949)) %>%
+    mutate(yday = lubridate::yday(date)) %>%
+    mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
+    mutate(TMEAN = as.numeric(TMEAN),
+           TMAX = as.numeric(TMAX),
+           TMIN = as.numeric(TMIN),
+           PRP = as.numeric(PRP)) %>%
+    mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
+    mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
+  
+  # Define the year period
+  yearneed <- 2
+  yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
+  rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
+                                      climate = climate_csv, 
+                                      yearneed = yearneed, 
+                                      refday = refday, 
+                                      lastdays = lastdays, 
+                                      rollwin = rollwin, 
+                                      variablemoving = 'TMEAN')
+  output_fit_summary.temp <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = data, 
+                                                                                           window_ranges_df = window_ranges_df,
+                                                                                           rolling.temperature.data = rolling.temperature.data,
+                                                                                           myform.fin = formula('log.seed ~ mean.temperature')))
+  return(output_fit_summary.temp)
+  
+}

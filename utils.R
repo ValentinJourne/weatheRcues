@@ -337,6 +337,99 @@ extract_sequences_auto <- function(vec, tolerance) {
   return(sequences)
 }
 
+#' Re-run climate windows modeling for a specified sequence
+#'
+#' This function re-runs climate windows modeling for a given index `z`, extracting 
+#' window ranges, filtering rolling temperature data, and merging it with biological 
+#' site-level data to fit a linear model (`lm`) using a predefined formula.
+#'
+#' @param z Integer. The index representing the row number in the `window_ranges_df` data frame, which contains the window ranges for analysis.
+#' @param tible.sitelevel Data frame. The biological site-level data, which contains 
+#'   seed production and other relevant variables for modeling. Default is `tible.sitelevel`.
+#' @param rolling.temperature.data Data frame. The climate data containing 
+#'   rolling temperature averages and other climate variables. Default is `rolling.temperature.data`.
+#'
+#' @return A data frame containing the model results, which include:
+#'   - `sitenewname`: The name of the biological site.
+#'   - `plotname.lon.lat`: The plot name and its longitude/latitude.
+#'   - `reference.day`: The day used as the reference point for windowing.
+#'   - `windows.size`: The size of the window in days.
+#'   - `window.open`: Start of the window period (days before the reference day).
+#'   - `window.close`: End of the window period (days before the reference day).
+#'   - `intercept`: The intercept of the fitted linear model.
+#'   - `intercept.se`: Standard error of the intercept.
+#'   - `estimate`: The coefficient estimate for the temperature variable in the model.
+#'   - `estimate.se`: Standard error of the coefficient estimate.
+#'   - `pvalue`: P-value for the temperature coefficient.
+#'   - `r2`: R-squared value of the model.
+#'   - `AIC`: Akaike Information Criterion for the model.
+#'   - `nobs`: Number of observations used in the model.
+#'   - `nsequence.id`: The index corresponding to the window range used.
+#'
+#' @details
+#' The function:
+#' 1. Extracts the `windowsopen` and `windowsclose` values from the `window_ranges_df`
+#'    for the specified index `z`.
+#' 2. Filters `rolling.temperature.data` to retrieve climate data within the window range.
+#' 3. Aggregates temperature data (mean temperature) for each combination of `LONGITUDE`, 
+#'    `LATITUDE`, and `year`.
+#' 4. Joins the filtered climate data with biological site-level data (`tible.sitelevel`).
+#' 5. Fits a linear model (`lm`) using the combined data and the predefined formula `myform.fin`.
+#' 6. Returns a data frame with the model's coefficients, standard errors, p-values, R-squared, AIC, 
+#'    number of observations, and sequence ID.
+#'
+#' @examples
+#' # Assuming window_ranges_df, rolling.temperature.data, and tible.sitelevel are defined:
+#' result <- reruning_windows_modelling(1, tible.sitelevel = tible.sitelevel, rolling.temperature.data = rolling.temperature.data)
+#' print(result)
+#'
+#' @export
+reruning_windows_modelling = function(z, tible.sitelevel = tible.sitelevel, window_ranges_df = window_ranges_df, rolling.temperature.data = rolling.temperature.data, myform.fin = formula('log.seed ~ mean.temperature')) {
+  
+  # Extract the window open and close for the current iteration
+  windowsopen <- window_ranges_df$windowsopen[z]
+  windowsclose <- window_ranges_df$windowsclose[z]
+  window_number <- window_ranges_df$windows.sequences.number[z]
+  
+  # Filter the rolling temperature data according to the current window range
+  climate_windows_best <- rolling.temperature.data %>%
+    filter(days.reversed <= windowsopen & days.reversed >= windowsclose) %>%
+    group_by(LONGITUDE, LATITUDE, year) %>%
+    summarise(mean.temperature = mean(rolling_avg_tmean, na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(window_number = window_number)  # Add the window number for identification
+  
+  # Merge temperature data with the site-level data and fit the model
+  fit.best.model <- tible.sitelevel %>%
+    mutate(year = Year) %>%
+    left_join(climate_windows_best, by = "year") %>%
+    lm(myform.fin, data = .)
+  
+  # Extract model coefficients and statistics
+  tidy_model <- tidy(fit.best.model)
+  glance_model <- glance(fit.best.model)
+  
+  # Create a data frame for the results
+  data.frame(
+    sitenewname = unique(tible.sitelevel$sitenewname),
+    plotname.lon.lat = unique(tible.sitelevel$plotname.lon.lat),
+    reference.day = refday,
+    windows.size = rollwin,
+    #knots.number = results$k,
+    window.open = windowsopen,
+    window.close = windowsclose,
+    intercept = tidy_model$estimate[1],
+    intercept.se = tidy_model$std.error[1],
+    estimate = tidy_model$estimate[2],
+    estimate.se = tidy_model$std.error[2],
+    pvalue = tidy_model$p.value[2],
+    r2 = glance_model$r.squared,
+    AIC = glance_model$AIC,
+    nobs = glance_model$nobs,
+    nsequence.id = z
+  )
+}
+
 
 #' Format Climate Data for Moving Windows analysis
 #' 
