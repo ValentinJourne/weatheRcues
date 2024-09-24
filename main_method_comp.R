@@ -2,7 +2,7 @@ library(tidyverse)
 library(climwin)
 library(broom)
 library(mgcv)
-
+library(here)
 #for maps 
 library(sf)
 library("rworldmap")
@@ -16,6 +16,17 @@ source('utils.R')
 source('method_CSP.R')
 source('method_climwin.R')
 source('method_signal.R')
+
+new.folder = FALSE 
+if(new.folder == TRUE){
+  dir.create(here('climate_dailyEOBS'))
+  dir.create(here('figures'))
+}
+
+nfile = check_folder_and_contents(here('climate_dailyEOBS'), file_pattern = '.qs')
+if(nfile$folder_exists == FALSE){stop(print('missing folder climate_dailyEOBS'))}
+if(length(nfile$files_present) == 0){stop(print('missing file to add in the folder of interest name climate_dailyEOBS'))}
+#SHOULD HAVE NO WARNING HERE
 
 # I am generating calendar 
 calendar = goingbackpastdayscalendar(refday = 305,
@@ -59,6 +70,8 @@ Fagus.seed = initial.data.mastree %>%
          plotname.lon.lat = paste0("longitude=",Longitude, "_","latitude=", Latitude)) %>% 
   as.data.frame()
 
+#get the mothod collection
+methods.collection.mv2 = Fagus.seed %>% dplyr::select(sitenewname, Country, Collection_method, Length) %>% distinct()
 
 
 seed.production.plot = Fagus.seed %>% 
@@ -167,7 +180,6 @@ climwin.dd = statistics_absolute_climwin %>%
   left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed)) 
 
 
-methods.collection.mv2 = Fagus.seed %>% dplyr::select(sitenewname, Country, Collection_method, Length) %>% distinct()
 
 climwin.all.sites = climwin.dd %>% dplyr::select(sitenewname, name, days.reversed) %>% 
   pivot_wider(names_from = "name", values_from = "days.reversed") %>% 
@@ -220,40 +232,29 @@ nameCSP =   results.moving.site %>%
 # Set names of the list based on group keys
 names(Results_CSP) <- apply(nameCSP, 1, paste)
 
-
-output_fit_summary = NULL
 rollwin = 1
 lastdays = max(range)
 myform.fin = formula('log.seed ~ mean.temperature')
 refday = 305
 
-names(Results_CSP)
-
-
-t = NULL
-for(i in 1:length(Results_CSP)){#
-  #Results_CSP
-  #i=20
-  Results_CSPsub = Results_CSP[[i]]
-  siteneame.forsub = unique(Results_CSP[[i]]$plotname.lon.lat)
-  
-  data.sub.fagus = Fagus.seed %>% #site = bio_data 
-    dplyr::filter(plotname.lon.lat == siteneame.forsub)
-  
-  ttt = runing_csp_site(Results_CSPsub = Results_CSPsub,
-                        data = data.sub.fagus,
-                        siteneame.forsub = siteneame.forsub,
-                        climate.beech.path = climate.beech.path,
-                        refday = 305,
-                        lastdays = max(range),
-                        rollwin = 1)
-  t = rbind(t, ttt)
-}
+statistics_csp_method = map_dfr(
+  1:length(Results_CSP), 
+  ~CSP_function_site(
+    Results_CSP[[.]], 
+    unique(Results_CSP[[.]]$plotname.lon.lat),
+    Fagus.seed = Fagus.seed, 
+    climate.beech.path = climate.beech.path,
+    refday = 305,
+    lastdays = 600,
+    rollwin = 1
+  ))
+qs::qsave(statistics_csp_method, 
+          here('statistics_csp.qs'))
 
 
 
 
-output_fit_summary.best.csp = t %>%
+output_fit_summary.best.csp = statistics_csp_method %>%
   group_by(sitenewname) %>% 
   dplyr::slice(which.max(r2))
 
@@ -276,12 +277,12 @@ csp.all.sites
 cowplot::save_plot("csp_allsites_methods.png",csp.all.sites, ncol = 1.5, nrow = 1.5, dpi = 300)
 
 
-quibble2(output_fit_summary.best$window.open, q = c(0.25, 0.5, 0.75))
-quibble2(output_fit_summary.best$window.close, q = c(0.25, 0.5, 0.75))
+quibble2(output_fit_summary.best.csp$window.open, q = c(0.25, 0.5, 0.75))
+quibble2(output_fit_summary.best.csp$window.close, q = c(0.25, 0.5, 0.75))
 
 
 #no subset 
-ggplot(output_fit_summary)+
+ggplot(statistics_csp_method)+
   geom_segment(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
   coord_flip()+
   geom_hline(yintercept = 133, color = 'red')+
@@ -289,42 +290,10 @@ ggplot(output_fit_summary)+
   ylim(0,547)
 
 #change name here between closing and opning I mixed them 
-quibble2(output_fit_summary.best$window.open, q = c(0.25, 0.5, 0.75))
-quibble2(output_fit_summary.best$window.close, q = c(0.25, 0.5, 0.75))
+quibble2(statistics_csp_method$window.open, q = c(0.25, 0.5, 0.75))
+quibble2(statistics_csp_method$window.close, q = c(0.25, 0.5, 0.75))
 
 
-#now simple correlaation and extract window size based on the correlation 
-sub.correlation.10days <- results.moving.site %>%
-  group_by(sitenewname) %>%
-  arrange(days.reversed) %>%
-  mutate(
-    max_corr_date = days.reversed[which.max(abs(correlation))]
-  ) %>%
-  filter(days.reversed >= max_corr_date - 10 & days.reversed <= max_corr_date + 10) %>%
-  ungroup() %>%
-  group_by(sitenewname) %>%
-  filter(days.reversed == min(days.reversed) | days.reversed == max(days.reversed)) %>%
-  ungroup()
-  
-#plot with simple correlation, extract top highest correlation , and then 10+- days before highest correlation
-ggplot(sub.correlation.10days %>% dplyr::select(sitenewname, days.reversed) %>% 
-         group_by(sitenewname) %>% 
-         mutate(windows = 1:2) %>% 
-         mutate(windows = ifelse(windows == 1, 'close', 'open')) %>% 
-         pivot_wider(names_from = "windows", values_from = "days.reversed"))+
-  geom_segment(aes(y = open, yend = close, x = sitenewname), size = 2) +
-  coord_flip()+
-  geom_hline(yintercept = 133, color = 'red')+
-  geom_hline(yintercept = 498, color = 'red')+
-  ylim(0,547)
-
-stat.correlation = sub.correlation.10days %>% dplyr::select(sitenewname, days.reversed) %>% 
-  group_by(sitenewname) %>% 
-  mutate(windows = 1:2) %>% 
-  mutate(windows = ifelse(windows == 1, 'close', 'open')) %>% 
-  pivot_wider(names_from = "windows", values_from = "days.reversed")
-quibble2(stat.correlation$open, q = c(0.25, 0.5, 0.75))
-quibble2(stat.correlation$close, q = c(0.25, 0.5, 0.75))
 
 #################################################################
 #############################################
@@ -333,22 +302,22 @@ quibble2(stat.correlation$close, q = c(0.25, 0.5, 0.75))
 #####
 #############################################
 
+
 tot_days = max(range)
 covariates.of.interest = 'TMEAN'
 knots = NULL
 output_fit_summary.psr = NULL
-tolerancedays = 10
-matrice = c(2,0)
+tolerancedays = 7
+matrice = c(3,1)
+
 #check why 9 is not working 
 #p=27
-for(p in 38:length(unique(Fagus.seed$sitenewname))){
+for(p in 1:length(unique(Fagus.seed$sitenewname))){
   site = unique(Fagus.seed$plotname.lon.lat)[p]
   bio_data = Fagus.seed %>% 
-    dplyr::filter(plotname.lon.lat == site ) %>% 
-    mutate(seeds01 = normalize01(Value),
-           seeds01 = ifelse(seeds01 == 0, 0.00000001, ifelse(seeds01==1, 0.999999, seeds01)))
+    dplyr::filter(plotname.lon.lat == site )
 
-  bio_data$seeds <- bio_data$log.seed
+  #bio_data$seeds <- bio_data$log.seed
   #climate 
   climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern =site)
   
@@ -416,11 +385,11 @@ for(p in 38:length(unique(Fagus.seed$sitenewname))){
   #which make sense when looking https://link.springer.com/article/10.1007/s00484-011-0472-z 
   if(is.null(knots) ){
     K = ny-1
-    model<-mgcv::gam(seeds~s(index.matrix,k=K,m=matrice,bs="ps",by=covariate.matrix), 
+    model<-mgcv::gam(log.seed~s(index.matrix,k=K,m=matrice,bs="ps",by=covariate.matrix), 
                data = bio_data, method="GCV.Cp")
     summary(model)
   }else{
-    model<-gam(seeds~s(index.matrix,k=K,m=c(2,1),bs="ps",by=covariate.matrix), 
+    model<-gam(log.seed~s(index.matrix,k=K,m=c(2,1),bs="ps",by=covariate.matrix), 
                data = bio_data, method="GCV.Cp")
     summary(model)}
   
@@ -432,72 +401,47 @@ for(p in 38:length(unique(Fagus.seed$sitenewname))){
   #I corrected here, rounding values create issues 
   #marker <- c(which(coefs$fit > round((1.96*sd(coefs$fit))+mean(coefs$fit),2)), 
   #            which(coefs$fit < round((1.96*sd(coefs$fit))-mean(coefs$fit),2)))
+  # marker <- c(
+  #    which(coefs$fit > (1.96 * sd(coefs$fit) + mean(coefs$fit))), 
+  #    which(coefs$fit < (1.96 * sd(coefs$fit) - mean(coefs$fit)))
+  #  )
   
-  #wihtout rounding now, will provide different output. In the case of Simmods et al, was certainly ok, but not here, since obs are not days////
+  #wihtout rounding now, will provide different output, and adjust by what is in the main study . 
+  #In the case of Simmods et al, was certainly ok, but not here, since obs are not days////
   upper_limit <- mean(coefs$fit) + (1.96 * sd(coefs$fit))
   lower_limit <- mean(coefs$fit) - (1.96 * sd(coefs$fit))
   
   # Find the markers (days) where the fit exceeds the threshold
   marker <- which(coefs$fit > upper_limit | coefs$fit < lower_limit)
   
+ if(length(marker) == 0){
+   output_fit_summary.psr.temp = data.frame(sitenewname = unique(bio_data$sitenewname),
+                                            plotname.lon.lat = unique(bio_data$plotname.lon.lat),
+                                            reference.day = refday,
+                                            windows.size = NA, 
+                                            window.open = NA, window.close = NA, intercept = NA,
+                                            intercept.se = NA, estimate = NA, estimate.se = NA,
+                                            pvalue = NA, r2 = NA, AIC = NA, nobs = ny,
+                                            nsequence.id = NA)
+ }else{
+   window <- round(plotted[[1]]$x[find_concurrent_period(marker, coefs)])
+   
+   #here does not work because not consecutive 
+   #extract_consecutive_sequences(window, keep_all = T) 
+   sequences_days = extract_sequences_auto(window, tolerance = tolerancedays) 
+   #i guess now will do the same shit as the other methods 
+   window_ranges_df <- save_window_ranges(sequences_days) %>% 
+     mutate(windows.sequences.number = 1:nrow(.))
+   
+   output_fit_summary.psr.temp <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = bio_data, 
+                                                                                                window_ranges_df = window_ranges_df,
+                                                                                                rolling.temperature.data = rolling.temperature.data,
+                                                                                                myform.fin = formula('log.seed ~ mean.temperature')))
+   
+ }
+   
+  output_fit_summary.psr = rbind(output_fit_summary.psr, output_fit_summary.psr.temp)
 
-  window <- round(plotted[[1]]$x[find_concurrent_period(marker, coefs)])
-  
-  #here does not work because not consecutive 
-  #extract_consecutive_sequences(window, keep_all = T) 
-  sequences_days = extract_sequences_auto(window, tolerance = tolerancedays) 
-  #i guess now will do the same shit as the other methods 
-  window_ranges_df <- save_window_ranges(sequences_days) %>% 
-    mutate(windows.sequences.number = 1:nrow(.))
-  
-  for (z in 1:nrow(window_ranges_df)) {
-    windowsopen <- window_ranges_df$windowsopen[z]
-    windowsclose <- window_ranges_df$windowsclose[z]
-    window_number <- window_ranges_df$windows.sequences.number[z]
-    
-    # Filter the rolling temperature data according to the current window range
-    #TO CHECK 
-    climate_windows_best <- rolling.temperature.data %>%
-      dplyr::filter(days.reversed <= windowsopen & days.reversed >= windowsclose) %>%
-      group_by(LONGITUDE,LATITUDE, year) %>%
-      summarise(mean.temperature = mean(rolling_avg_tmean, na.rm = TRUE)) %>%
-      ungroup() %>%
-      mutate(window_number = window_number)  # Add the window number for identification
-    
-    #need to change year colnames :( 
-    fit.best.model = bio_data %>% 
-      rename(year = Year) %>% 
-      left_join(climate_windows_best) %>%
-      lm(myform.fin, data = .)
-    
-    intercept = tidy(fit.best.model)$estimate[1]
-    intercept.se = tidy(fit.best.model)$std.error[1]
-    estimate.model = tidy(fit.best.model)$estimate[2]
-    estimate.se.model = tidy(fit.best.model)$std.error[2]
-    pvalue.model = tidy(fit.best.model)$p.value[2]
-    r2 = glance(fit.best.model)$r.squared
-    AIC = glance(fit.best.model)$AIC
-    nobs = glance(fit.best.model)$nobs
-    nsequence.id = z
-    
-    output_fit_summary.temp.psr <- data.frame(sitenewname = unique(bio_data$sitenewname),
-                                              plotname.lon.lat = unique(bio_data$plotname.lon.lat),
-                                              reference.day = refday,
-                                              windows.size = rollwin,
-                                              knots.number = K,
-                                              window.open = windowsopen,
-                                              window.close = windowsclose,
-                                              intercept = intercept,
-                                              intercept.se = intercept.se,
-                                              estimate = estimate.model,
-                                              estimate.se = estimate.se.model,
-                                              pvalue = pvalue.model,
-                                              r2 = r2,
-                                              AIC = AIC,
-                                              nobs = nobs,
-                                              nsequence.id = nsequence.id)
-    output_fit_summary.psr = rbind(output_fit_summary.psr, output_fit_summary.temp.psr)
-  }
 
 }
 
@@ -506,6 +450,7 @@ ggplot(output_fit_summary.psr %>%
          group_by(sitenewname) %>% 
          slice(which.max(r2)))+
   geom_segment(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
+  geom_point(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
   coord_flip()+
   geom_hline(yintercept = 133, color = 'red')+
   geom_hline(yintercept = 498, color = 'red')+
@@ -521,6 +466,8 @@ psr.all.sites =  output_fit_summary.psr.best%>%
   mutate(sitenewname = forcats::fct_reorder(sitenewname, Collection_method)) %>%
   ggplot()+
   geom_segment(aes(y = window.open, yend = window.close, x = sitenewname, col = Collection_method), size = 2, shape = 15) +
+  geom_point(aes(y = window.open, x = sitenewname, col = Collection_method), size = 2, shape = 15) +
+  
   coord_flip()+
   geom_hline(yintercept = 133, color = 'red')+
   geom_hline(yintercept = 498, color = 'red')+
@@ -610,7 +557,7 @@ for(i in 1:length(Results_CSP)){
   window.basic = as.vector(formatzek$day)
   
   #tolerance of 20 days gaps between 0 
-  sequences_days = extract_sequences_auto(window.basic, tolerance = 10) 
+  sequences_days = extract_sequences_auto(window.basic, tolerance = 7) 
   #i guess now will do the same shit as the other methods 
   window_ranges_df <- save_window_ranges(sequences_days) %>% 
     mutate(windows.sequences.number = 1:nrow(.))
@@ -722,48 +669,38 @@ averagedensr2method
 cowplot::save_plot("averager2.method.png",averagedensr2method, ncol = 1, nrow = 1.4, dpi = 300)
 
 
-
-# Plot result
-par(mfrow = c(2,1),oma = c(2,2,0,0) + 0.1,mar = c(0,0,2,1) + 0.2)
-plot(1:length(y),y,type="l",ylab="",xlab="") 
-lines(1:length(y),result$avgFilter,type="l",col="cyan",lwd=2)
-lines(1:length(y),result$avgFilter+threshold*result$stdFilter,type="l",col="green",lwd=2)
-lines(1:length(y),result$avgFilter-threshold*result$stdFilter,type="l",col="green",lwd=2)
-plot(result$signals,type="S",col="red",ylab="",xlab="",ylim=c(-1.5,1.5),lwd=2)
-
-
-
-
-plot(replace_0((result$signals), threshold = 10),type="S",col="red",ylab="",xlab="",ylim=c(-1.5,1.5),lwd=2)
-
-
-
-
-
-
-
-#my short ml 
-list_slope <- as.list(Results_CSP[[i]]$estimate)
-list_rs <- as.list(Results_CSP[[i]]$r.squared)
-
-day = seq(rollwin,(lastdays-1),1)
-slope = list_slope
-r_s = list_rs
-#k = nrow(site)
-
-temporary <- data.frame(sitenewname = unique(Results_CSP[[1]]$sitenewname),
-                        slope = unlist(slope), 
-                        day = day, 
-                        r_s = unlist(r_s))
-
-
-
-
-
-
-
-
-
+#now simple correlaation and extract window size based on the correlation 
+# sub.correlation.10days <- results.moving.site %>%
+#   group_by(sitenewname) %>%
+#   arrange(days.reversed) %>%
+#   mutate(
+#     max_corr_date = days.reversed[which.max(abs(correlation))]
+#   ) %>%
+#   filter(days.reversed >= max_corr_date - 10 & days.reversed <= max_corr_date + 10) %>%
+#   ungroup() %>%
+#   group_by(sitenewname) %>%
+#   filter(days.reversed == min(days.reversed) | days.reversed == max(days.reversed)) %>%
+#   ungroup()
+# 
+# #plot with simple correlation, extract top highest correlation , and then 10+- days before highest correlation
+# ggplot(sub.correlation.10days %>% dplyr::select(sitenewname, days.reversed) %>% 
+#          group_by(sitenewname) %>% 
+#          mutate(windows = 1:2) %>% 
+#          mutate(windows = ifelse(windows == 1, 'close', 'open')) %>% 
+#          pivot_wider(names_from = "windows", values_from = "days.reversed"))+
+#   geom_segment(aes(y = open, yend = close, x = sitenewname), size = 2) +
+#   coord_flip()+
+#   geom_hline(yintercept = 133, color = 'red')+
+#   geom_hline(yintercept = 498, color = 'red')+
+#   ylim(0,547)
+# 
+# stat.correlation = sub.correlation.10days %>% dplyr::select(sitenewname, days.reversed) %>% 
+#   group_by(sitenewname) %>% 
+#   mutate(windows = 1:2) %>% 
+#   mutate(windows = ifelse(windows == 1, 'close', 'open')) %>% 
+#   pivot_wider(names_from = "windows", values_from = "days.reversed")
+# quibble2(stat.correlation$open, q = c(0.25, 0.5, 0.75))
+# quibble2(stat.correlation$close, q = c(0.25, 0.5, 0.75))
 
 
 # 
@@ -1128,3 +1065,25 @@ temporary <- data.frame(sitenewname = unique(Results_CSP[[1]]$sitenewname),
 #   output_fit_summary = rbind(output_fit_summary, output_fit_summary.temp)
 # }
 # 
+
+# t = NULL
+# for(i in 1:length(Results_CSP)){#
+#   #Results_CSP
+#   #i=20
+#   
+#   Results_CSPsub = Results_CSP[[i]]
+#   siteneame.forsub = unique(Results_CSP[[i]]$plotname.lon.lat)
+#   
+#   data.sub.fagus = Fagus.seed %>% #site = bio_data 
+#     dplyr::filter(plotname.lon.lat == siteneame.forsub)
+#   
+#   ttt = runing_csp_site(Results_CSPsub = Results_CSPsub,
+#                         data = data.sub.fagus,
+#                         siteneame.forsub = siteneame.forsub,
+#                         climate.beech.path = climate.beech.path,
+#                         refday = 305,
+#                         lastdays = max(range),
+#                         rollwin = 1)
+#   t = rbind(t, ttt)
+# }
+
