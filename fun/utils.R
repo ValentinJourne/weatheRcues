@@ -33,7 +33,7 @@ check_folder_and_contents <- function(folder_path, file_pattern = NULL) {
   # Get the list of files in the folder
   folder_contents <- list.files(path = folder_path, full.names = FALSE)
   # If a pattern is provided, filter the files by pattern
-  else if (!is.null(file_pattern)) {
+   if (!is.null(file_pattern)) {
     files_present <- folder_contents[grepl(file_pattern, folder_contents)]
   } else {
     # Return all files if no specific requirement

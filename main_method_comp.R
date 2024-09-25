@@ -17,6 +17,11 @@ source('method_CSP.R')
 source('method_climwin.R')
 source('method_signal.R')
 
+functions <- list.files(here("fun"), full.names = T) %>%
+  purrr::map(source)
+
+
+
 new.folder = FALSE 
 if(new.folder == TRUE){
   dir.create(here('climate_dailyEOBS'))
@@ -119,7 +124,7 @@ MapsMastree <- ggplot(data=mapBase$geometry)+
 
 library(patchwork)
 
-cowplot::save_plot("data.des.png",MapsMastree+seed.production.plot, 
+cowplot::save_plot(here("figures/data.des.png"),MapsMastree+seed.production.plot, 
                    ncol = 2, nrow = 1.5, dpi = 300)
 
 #some option 
@@ -195,7 +200,7 @@ ggplot()+
   scale_color_brewer(palette = "Dark2")+
   scale_fill_brewer(palette = "Dark2")
 
-cowplot::save_plot("climwin_allsites_methods.png",climwin.all.sites, ncol = 1.5, nrow = 1.5, dpi = 300)
+cowplot::save_plot(here("figures/climwin_allsites_methods.png"),climwin.all.sites, ncol = 1.5, nrow = 1.5, dpi = 300)
 
   
 quibble2(statistics_absolute_climwin$WindowOpen, q = c(0.25, 0.5, 0.75))
@@ -476,7 +481,7 @@ psr.all.sites =  output_fit_summary.psr.best%>%
   scale_fill_brewer(palette = "Dark2")
 psr.all.sites
 
-cowplot::save_plot("psr_allsites_methods.png",psr.all.sites, ncol = 1.5, nrow = 1.5, dpi = 300)
+cowplot::save_plot(here("figures/psr_allsites_methods.png"),psr.all.sites, ncol = 1.5, nrow = 1.5, dpi = 300)
 
 
 quibble2(output_fit_summary.psr.best$window.close, q = c(0.25, 0.5, 0.75))
