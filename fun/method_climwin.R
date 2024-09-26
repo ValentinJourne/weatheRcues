@@ -56,7 +56,8 @@ climwin_site_days <- function(climate.beech.path,
                               cinterval = 'day',
                               refday = c(01, 11),
                               optionwindows = 'absolute',
-                              climate_var = 'TMEAN') {
+                              climate_var = 'TMEAN',
+                              formulanull = formula(log.seed ~ 1)) {
   
   print(paste("range:", range))
   print(paste("cinterval:", cinterval))

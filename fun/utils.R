@@ -451,7 +451,7 @@ extract_sequences_auto <- function(vec, tolerance) {
 #' print(result)
 #'
 #' @export
-reruning_windows_modelling = function(z, tible.sitelevel = tible.sitelevel, window_ranges_df = window_ranges_df, rolling.temperature.data = rolling.temperature.data, myform.fin = formula('log.seed ~ mean.temperature')) {
+reruning_windows_modelling = function(z, tible.sitelevel = tible.sitelevel, window_ranges_df = window_ranges_df, rolling.temperature.data = rolling.temperature.data, myform.fin = formula('log.seed ~ mean.temperature'), refday = 305, rollwin = 1) {
   
   # Extract the window open and close for the current iteration
   windowsopen <- window_ranges_df$windowsopen[z]

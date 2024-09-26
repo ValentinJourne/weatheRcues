@@ -73,6 +73,9 @@ Fagus.seed = initial.data.mastree %>%
   mutate(Date = paste0( "15/06/",Year)) %>% 
   mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y"),
          plotname.lon.lat = paste0("longitude=",Longitude, "_","latitude=", Latitude)) %>% 
+  group_by(plotname.lon.lat) %>%   
+  sample_frac(0.5) %>%        
+  ungroup() %>% 
   as.data.frame()
 
 #get the mothod collection
@@ -148,7 +151,7 @@ beech.site.all = unique(Fagus.seed$plotname.lon.lat)
 # Define a function to process each site
 #I want the function to work only for one site
 #option to run in parallel to make it faster
-run.climwin <- F
+run.climwin <- T
 #take some time ! 
 if(run.climwin==T){
   library(furrr)#make it in parallele, https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html
@@ -307,151 +310,23 @@ quibble2(statistics_csp_method$window.close, q = c(0.25, 0.5, 0.75))
 #####
 #############################################
 
-
-tot_days = max(range)
-covariates.of.interest = 'TMEAN'
-knots = NULL
-output_fit_summary.psr = NULL
-tolerancedays = 7
-matrice = c(3,1)
-
-#check why 9 is not working 
-#p=27
-for(p in 1:length(unique(Fagus.seed$sitenewname))){
-  site = unique(Fagus.seed$plotname.lon.lat)[p]
-  bio_data = Fagus.seed %>% 
-    dplyr::filter(plotname.lon.lat == site )
-
-  #bio_data$seeds <- bio_data$log.seed
-  #climate 
-  climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern =site)
-  
-  
-  climate_csv <- qs::qread(climate_beech_unique) %>%
-    as.data.frame() %>%
-    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-    mutate(date = foo(DATEB, 1949)) %>%
-    mutate(yday = lubridate::yday(date)) %>%
-    mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-    mutate(TMEAN = as.numeric(TMEAN),
-           TMAX = as.numeric(TMAX),
-           TMIN = as.numeric(TMIN),
-           PRP = as.numeric(PRP)) %>%
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
-  
-  # need climate data to be arranged with year as row
-  # need to reduce climate dataframe to only year, yday and temp
-  climate2 <- data.frame(year = climate_csv$year, yday = climate_csv$yday, temp = climate_csv[,covariates.of.interest])
-  tempmat <- climate2 %>% spread(, key = yday, value = temp)
-  tempmat <- tempmat[,-1]
-  #number years monitoring seeds 
-  ny<-length(bio_data$Year)
-  nt<-tot_days-1
-  ## Formatting data
-  #based on Simmonds et al code
-  index.matrix=matrix(1:nt,ny,nt,byrow=TRUE)
-  # Define the year period
-  yearneed <- 2
-  #will fiter the year period here to the year needeed 
-  yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
-  
-  # Apply the function across all years in yearperiod and combine results
-  rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
-                                      climate = climate_csv, 
-                                      yearneed = yearneed, 
-                                      refday = 305, 
-                                      lastdays = tot_days, 
-                                      rollwin = 1, 
-                                      variablemoving = covariates.of.interest)
-  
-  #merge data seed to moving climate
-  tible.sitelevel = bio_data %>% #site = bio_data 
-    rename(year = Year) %>% 
-    left_join(rolling.temperature.data) %>% 
-    drop_na(!!sym('rolling_avg_tmean'))
-  
-  climate2 <- data.frame(year = tible.sitelevel$year, 
-                         yday = tible.sitelevel$days.reversed, 
-                         temp = tible.sitelevel$rolling_avg_tmean)
-  covariate.matrix = climate2 %>%
-    spread(key = yday, value = temp) %>%
-    dplyr::select(-year) %>%                    
-    as.matrix()    
-  covariate.matrix <- unname(as.matrix(covariate.matrix))
-  
-  #second order, but from https://link.springer.com/article/10.1007/s00484-007-0141-4
-  #it is possible to adjust between 1-3 (instead of 2) like c(1,1) instead of c(2,1)
-  #here I specify to 0 instead of 1 as in SImmonds et al, meaning that I have no penaties on slope
-  #if using 1 instead of 0, the model is not able to identify a cues 
-  #and I think it is normal and ok to be more flexible because we might have multiple peaks with time 
-  #So if I want to specify K = 30, for example it is working 
-  #not if knots are too low 
-  #which make sense when looking https://link.springer.com/article/10.1007/s00484-011-0472-z 
-  if(is.null(knots) ){
-    K = ny-1
-    model<-mgcv::gam(log.seed~s(index.matrix,k=K,m=matrice,bs="ps",by=covariate.matrix), 
-               data = bio_data, method="GCV.Cp")
-    summary(model)
-  }else{
-    model<-gam(log.seed~s(index.matrix,k=K,m=c(2,1),bs="ps",by=covariate.matrix), 
-               data = bio_data, method="GCV.Cp")
-    summary(model)}
-  
-  
-  plotted <- plot(model, ylab = c('partial effect'), xlab = c('days prior tree growth'))
-  coefs <- data.frame(fit = plotted[[1]]$fit)
-  #"The most important days of temperature influence on phenology in the year may be identified by as those 
-  #with partial coefficients greater than or less than zero by more than two times their standard error."
-  #I corrected here, rounding values create issues 
-  #marker <- c(which(coefs$fit > round((1.96*sd(coefs$fit))+mean(coefs$fit),2)), 
-  #            which(coefs$fit < round((1.96*sd(coefs$fit))-mean(coefs$fit),2)))
-  # marker <- c(
-  #    which(coefs$fit > (1.96 * sd(coefs$fit) + mean(coefs$fit))), 
-  #    which(coefs$fit < (1.96 * sd(coefs$fit) - mean(coefs$fit)))
-  #  )
-  
-  #wihtout rounding now, will provide different output, and adjust by what is in the main study . 
-  #In the case of Simmods et al, was certainly ok, but not here, since obs are not days////
-  upper_limit <- mean(coefs$fit) + (1.96 * sd(coefs$fit))
-  lower_limit <- mean(coefs$fit) - (1.96 * sd(coefs$fit))
-  
-  # Find the markers (days) where the fit exceeds the threshold
-  marker <- which(coefs$fit > upper_limit | coefs$fit < lower_limit)
-  
- if(length(marker) == 0){
-   output_fit_summary.psr.temp = data.frame(sitenewname = unique(bio_data$sitenewname),
-                                            plotname.lon.lat = unique(bio_data$plotname.lon.lat),
-                                            reference.day = refday,
-                                            windows.size = NA, 
-                                            window.open = NA, window.close = NA, intercept = NA,
-                                            intercept.se = NA, estimate = NA, estimate.se = NA,
-                                            pvalue = NA, r2 = NA, AIC = NA, nobs = ny,
-                                            nsequence.id = NA)
- }else{
-   window <- round(plotted[[1]]$x[find_concurrent_period(marker, coefs)])
-   
-   #here does not work because not consecutive 
-   #extract_consecutive_sequences(window, keep_all = T) 
-   sequences_days = extract_sequences_auto(window, tolerance = tolerancedays) 
-   #i guess now will do the same shit as the other methods 
-   window_ranges_df <- save_window_ranges(sequences_days) %>% 
-     mutate(windows.sequences.number = 1:nrow(.))
-   
-   output_fit_summary.psr.temp <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = bio_data, 
-                                                                                                window_ranges_df = window_ranges_df,
-                                                                                                rolling.temperature.data = rolling.temperature.data,
-                                                                                                myform.fin = formula('log.seed ~ mean.temperature')))
-   
- }
-   
-  output_fit_summary.psr = rbind(output_fit_summary.psr, output_fit_summary.psr.temp)
+site = unique(Fagus.seed$plotname.lon.lat)#[30]
+#refday = 305
+statistics_psr_method = map_dfr(
+  site, 
+  ~ PSR_function_site(
+    site = .x,
+    Fagus.seed = Fagus.seed,  # Use .x correctly here
+    tot_days = max(range),
+    lastdays = 600,
+    matrice = c(3,1),
+    knots = NULL
+  )
+)
 
 
-}
 
-
-ggplot(output_fit_summary.psr %>% 
+ggplot(statistics_psr_method %>% 
          group_by(sitenewname) %>% 
          slice(which.max(r2)))+
   geom_segment(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
@@ -461,7 +336,7 @@ ggplot(output_fit_summary.psr %>%
   geom_hline(yintercept = 498, color = 'red')+
   ylim(0,600)
 
-output_fit_summary.psr.best = output_fit_summary.psr  %>% 
+output_fit_summary.psr.best = statistics_psr_method  %>% 
   group_by(sitenewname) %>% 
   slice(which.max(r2))
 psr.all.sites =  output_fit_summary.psr.best%>%  
@@ -493,133 +368,29 @@ quibble2(output_fit_summary.psr.best$window.open, q = c(0.25, 0.5, 0.75))
 
 output_fit_summary.basic = NULL
 #Results_CSP
-lag       <- 100
-threshold <- 3
-influence <- 0
 
-for(i in 1:length(Results_CSP)){
-  
-  site.name = unique(Results_CSP[[i]]$plotname.lon.lat)
-  
-  #first reformat data 
-  bio_data <- Fagus.seed %>%
-    filter(plotname.lon.lat == site.name) %>%
-    as.data.frame() 
-  
-  # Climate load and format
-  climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = site.name)
-  # Reformat the climate data
-  climate_csv <- qs::qread(climate_beech_unique) %>%
-    as.data.frame() %>%
-    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-    mutate(date = foo(DATEB, 1949)) %>%
-    mutate(yday = lubridate::yday(date)) %>%
-    mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-    mutate(TMEAN = as.numeric(TMEAN),
-           TMAX = as.numeric(TMAX),
-           TMIN = as.numeric(TMIN),
-           PRP = as.numeric(PRP)) %>%
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
-  
-  # Define the year period
-  yearneed <- 2
-  yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
-  
-  # Apply the function across all years in yearperiod and combine results
-  rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
-                                      climate = climate_csv, 
-                                      yearneed = yearneed, 
-                                      refday = 305, 
-                                      lastdays = lastdays, 
-                                      rollwin = 1, 
-                                      variablemoving = 'TMEAN')
-  
-  #now load data related to lm ~ days ~ provide r2 and slope 
-  list_slope <- as.list(Results_CSP[[i]]$estimate)
-  list_rs <- as.list(Results_CSP[[i]]$r.squared)
-  
-  day = seq(rollwin,(lastdays-1),1)
-  slope = list_slope
-  r_s = list_rs
-  #k = nrow(site)
-  temporary <- data.frame(slope = unlist(slope), 
-                          day = day, 
-                          r_s = unlist(r_s))
-  
-  data_beforesign = temporary %>% 
-    mutate(combo_r2_slope = r_s*slope) 
-  
-  y = data_beforesign$combo_r2_slope
+siteforsub = site[1]
 
-  result <- ThresholdingAlgo(y,lag,threshold,influence)
-  
-  #now made them together
-  formatzek = data.frame(day = seq(rollwin,(lastdays-1),1),
-                         signal = replace_0((result$signals), threshold = 10)) %>% 
-    dplyr::filter(signal !=0)
-  
-  window.basic = as.vector(formatzek$day)
-  
-  #tolerance of 20 days gaps between 0 
-  sequences_days = extract_sequences_auto(window.basic, tolerance = 7) 
-  #i guess now will do the same shit as the other methods 
-  window_ranges_df <- save_window_ranges(sequences_days) %>% 
-    mutate(windows.sequences.number = 1:nrow(.))
-  
-  #output_fit_summary.basic = NULL
-  for (z in 1:nrow(window_ranges_df)) {
-    windowsopen <- window_ranges_df$windowsopen[z]
-    windowsclose <- window_ranges_df$windowsclose[z]
-    window_number <- window_ranges_df$windows.sequences.number[z]
-    
-    # Filter the rolling temperature data according to the current window range
-    climate_windows_best <- rolling.temperature.data %>%
-      dplyr::filter(days.reversed <= windowsopen & days.reversed >= windowsclose) %>%
-      group_by(LONGITUDE,LATITUDE, year) %>%
-      summarise(mean.temperature = mean(rolling_avg_tmean, na.rm = TRUE)) %>%
-      ungroup() %>%
-      mutate(window_number = window_number)  # Add the window number for identification
-    
-    #need to change year colnames :( 
-    fit.best.model = bio_data %>% 
-      rename(year = Year) %>% 
-      left_join(climate_windows_best) %>%
-      lm(myform.fin, data = .)
-    
-    intercept = tidy(fit.best.model)$estimate[1]
-    intercept.se = tidy(fit.best.model)$std.error[1]
-    estimate.model = tidy(fit.best.model)$estimate[2]
-    estimate.se.model = tidy(fit.best.model)$std.error[2]
-    pvalue.model = tidy(fit.best.model)$p.value[2]
-    r2 = glance(fit.best.model)$r.squared
-    AIC = glance(fit.best.model)$AIC
-    nobs = glance(fit.best.model)$nobs
-    nsequence.id = z
-    
-    output_fit_summary.temp.basic <- data.frame(sitenewname = unique(bio_data$sitenewname),
-                                                plotname.lon.lat = unique(bio_data$plotname.lon.lat),
-                                                reference.day = refday,
-                                                windows.size = rollwin,
-                                                window.open = windowsopen,
-                                                window.close = windowsclose,
-                                                intercept = intercept,
-                                                intercept.se = intercept.se,
-                                                estimate = estimate.model,
-                                                estimate.se = estimate.se.model,
-                                                pvalue = pvalue.model,
-                                                r2 = r2,
-                                                AIC = AIC,
-                                                nobs = nobs,
-                                                nsequence.id = nsequence.id)
-    
-    output_fit_summary.basic = rbind(output_fit_summary.basic, output_fit_summary.temp.basic)
-    
-  }
-  
-}
 
-output_fit_summary.basic.best = output_fit_summary.basic  %>% 
+Results_CSPsub = Results_CSP[[i]]
+
+
+
+
+statistics_basic_method = map_dfr(
+  1:length(Results_CSP), 
+  ~basiccues_function_site(
+    Results_CSP[[.]], 
+    unique(Results_CSP[[.]]$plotname.lon.lat),
+    Fagus.seed = Fagus.seed, 
+    climate.beech.path = climate.beech.path,
+    refday = 305,
+    lastdays = 600,
+    rollwin = 1
+  ))
+
+
+output_fit_summary.basic.best = statistics_basic_method  %>% 
   group_by(sitenewname) %>% 
   slice(which.max(r2))%>% 
   ungroup()
@@ -1091,4 +862,203 @@ cowplot::save_plot("averager2.method.png",averagedensr2method, ncol = 1, nrow = 
 #                         rollwin = 1)
 #   t = rbind(t, ttt)
 # }
+# 
+# for(p in 1:length(unique(Fagus.seed$sitenewname))){
+#   site = unique(Fagus.seed$plotname.lon.lat)[p]
+#   bio_data = Fagus.seed %>% 
+#     dplyr::filter(plotname.lon.lat == site )
+#   
+#   #bio_data$seeds <- bio_data$log.seed
+#   #climate 
+#   climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern =site)
+#   
+#   
+#   climate_csv <- qs::qread(climate_beech_unique) %>%
+#     as.data.frame() %>%
+#     mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
+#     mutate(date = foo(DATEB, 1949)) %>%
+#     mutate(yday = lubridate::yday(date)) %>%
+#     mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
+#     mutate(TMEAN = as.numeric(TMEAN),
+#            TMAX = as.numeric(TMAX),
+#            TMIN = as.numeric(TMIN),
+#            PRP = as.numeric(PRP)) %>%
+#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
+#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
+#   
+#   # need climate data to be arranged with year as row
+#   # need to reduce climate dataframe to only year, yday and temp
+#   climate2 <- data.frame(year = climate_csv$year, yday = climate_csv$yday, temp = climate_csv[,covariates.of.interest])
+#   tempmat <- climate2 %>% spread(, key = yday, value = temp)
+#   tempmat <- tempmat[,-1]
+#   #number years monitoring seeds 
+#   ny<-length(bio_data$Year)
+#   nt<-tot_days-1
+#   ## Formatting data
+#   #based on Simmonds et al code
+#   index.matrix=matrix(1:nt,ny,nt,byrow=TRUE)
+#   # Define the year period
+#   yearneed <- 2
+#   #will fiter the year period here to the year needeed 
+#   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
+#   
+#   # Apply the function across all years in yearperiod and combine results
+#   rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
+#                                       climate = climate_csv, 
+#                                       yearneed = yearneed, 
+#                                       refday = 305, 
+#                                       lastdays = tot_days, 
+#                                       rollwin = 1, 
+#                                       variablemoving = covariates.of.interest)
+#   
+#   #merge data seed to moving climate
+#   tible.sitelevel = bio_data %>% #site = bio_data 
+#     rename(year = Year) %>% 
+#     left_join(rolling.temperature.data) %>% 
+#     drop_na(!!sym('rolling_avg_tmean'))
+#   
+#   climate2 <- data.frame(year = tible.sitelevel$year, 
+#                          yday = tible.sitelevel$days.reversed, 
+#                          temp = tible.sitelevel$rolling_avg_tmean)
+#   covariate.matrix = climate2 %>%
+#     spread(key = yday, value = temp) %>%
+#     dplyr::select(-year) %>%                    
+#     as.matrix()    
+#   covariate.matrix <- unname(as.matrix(covariate.matrix))
+#   
+#   #second order, but from https://link.springer.com/article/10.1007/s00484-007-0141-4
+#   #it is possible to adjust between 1-3 (instead of 2) like c(1,1) instead of c(2,1)
+#   #here I specify to 0 instead of 1 as in SImmonds et al, meaning that I have no penaties on slope
+#   #if using 1 instead of 0, the model is not able to identify a cues 
+#   #and I think it is normal and ok to be more flexible because we might have multiple peaks with time 
+#   #So if I want to specify K = 30, for example it is working 
+#   #not if knots are too low 
+#   #which make sense when looking https://link.springer.com/article/10.1007/s00484-011-0472-z 
+#   if(is.null(knots) ){
+#     K = ny-1
+#     model<-mgcv::gam(log.seed~s(index.matrix,k=K,m=matrice,bs="ps",by=covariate.matrix), 
+#                      data = bio_data, method="GCV.Cp")
+#     summary(model)
+#   }else{
+#     model<-gam(log.seed~s(index.matrix,k=K,m=c(2,1),bs="ps",by=covariate.matrix), 
+#                data = bio_data, method="GCV.Cp")
+#     summary(model)}
+#   
+#   
+#   plotted <- plot(model, ylab = c('partial effect'), xlab = c('days prior tree growth'))
+#   coefs <- data.frame(fit = plotted[[1]]$fit)
+#   #"The most important days of temperature influence on phenology in the year may be identified by as those 
+#   #with partial coefficients greater than or less than zero by more than two times their standard error."
+#   #I corrected here, rounding values create issues 
+#   #marker <- c(which(coefs$fit > round((1.96*sd(coefs$fit))+mean(coefs$fit),2)), 
+#   #            which(coefs$fit < round((1.96*sd(coefs$fit))-mean(coefs$fit),2)))
+#   # marker <- c(
+#   #    which(coefs$fit > (1.96 * sd(coefs$fit) + mean(coefs$fit))), 
+#   #    which(coefs$fit < (1.96 * sd(coefs$fit) - mean(coefs$fit)))
+#   #  )
+#   
+#   #wihtout rounding now, will provide different output, and adjust by what is in the main study . 
+#   #In the case of Simmods et al, was certainly ok, but not here, since obs are not days////
+#   upper_limit <- mean(coefs$fit) + (1.96 * sd(coefs$fit))
+#   lower_limit <- mean(coefs$fit) - (1.96 * sd(coefs$fit))
+#   
+#   # Find the markers (days) where the fit exceeds the threshold
+#   marker <- which(coefs$fit > upper_limit | coefs$fit < lower_limit)
+#   
+#   if(length(marker) == 0){
+#     output_fit_summary.psr.temp = data.frame(sitenewname = unique(bio_data$sitenewname),
+#                                              plotname.lon.lat = unique(bio_data$plotname.lon.lat),
+#                                              reference.day = refday,
+#                                              windows.size = NA, 
+#                                              window.open = NA, window.close = NA, intercept = NA,
+#                                              intercept.se = NA, estimate = NA, estimate.se = NA,
+#                                              pvalue = NA, r2 = NA, AIC = NA, nobs = ny,
+#                                              nsequence.id = NA)
+#   }else{
+#     window <- round(plotted[[1]]$x[find_concurrent_period(marker, coefs)])
+#     
+#     #here does not work because not consecutive 
+#     #extract_consecutive_sequences(window, keep_all = T) 
+#     sequences_days = extract_sequences_auto(window, tolerance = tolerancedays) 
+#     #i guess now will do the same shit as the other methods 
+#     window_ranges_df <- save_window_ranges(sequences_days) %>% 
+#       mutate(windows.sequences.number = 1:nrow(.))
+#     
+#     output_fit_summary.psr.temp <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = bio_data, 
+#                                                                                                  window_ranges_df = window_ranges_df,
+#                                                                                                  rolling.temperature.data = rolling.temperature.data,
+#                                                                                                  myform.fin = formula('log.seed ~ mean.temperature')))
+#     
+#   }
+#   
+#   output_fit_summary.psr = rbind(output_fit_summary.psr, output_fit_summary.psr.temp)
+#   
+#   
+# }
+# 
 
+# for(i in 1:length(Results_CSP)){
+#   
+#   site.name = unique(Results_CSP[[i]]$plotname.lon.lat)
+#   
+#   #first reformat data 
+#   bio_data <- Fagus.seed %>%
+#     filter(plotname.lon.lat == site.name) %>%
+#     as.data.frame() 
+#   
+#   # Climate load and format
+#   climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = site.name)
+#   # Reformat the climate data
+#   climate_csv <- qs::qread(climate_beech_unique) %>%
+#     as.data.frame() %>%
+#     mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
+#     mutate(date = foo(DATEB, 1949)) %>%
+#     mutate(yday = lubridate::yday(date)) %>%
+#     mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
+#     mutate(TMEAN = as.numeric(TMEAN),
+#            TMAX = as.numeric(TMAX),
+#            TMIN = as.numeric(TMIN),
+#            PRP = as.numeric(PRP)) %>%
+#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
+#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
+#   
+#   # Define the year period
+#   yearneed <- 2
+#   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
+#   
+#   # Apply the function across all years in yearperiod and combine results
+#   rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
+#                                       climate = climate_csv, 
+#                                       yearneed = yearneed, 
+#                                       refday = 305, 
+#                                       lastdays = lastdays, 
+#                                       rollwin = 1, 
+#                                       variablemoving = 'TMEAN')
+#   
+#   #now load data related to lm ~ days ~ provide r2 and slope 
+#   
+#   
+#   result <- ThresholdingAlgo(y,lag,threshold,influence)
+#   
+#   #now made them together
+#   formatzek = data.frame(day = seq(rollwin,(lastdays-1),1),
+#                          signal = replace_0((result$signals), threshold = tolerancedays)) %>% 
+#     dplyr::filter(signal !=0)
+#   
+#   window.basic = as.vector(formatzek$day)
+#   
+#   #tolerance of 20 days gaps between 0 
+#   sequences_days = extract_sequences_auto(window.basic, tolerance = tolerancedays) 
+#   #i guess now will do the same shit as the other methods 
+#   window_ranges_df <- save_window_ranges(sequences_days) %>% 
+#     mutate(windows.sequences.number = 1:nrow(.))
+#   
+#   output_fit_summary.temp.basic <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = bio_data, 
+#                                                                                                  window_ranges_df = window_ranges_df,
+#                                                                                                  rolling.temperature.data = rolling.temperature.data,
+#                                                                                                  myform.fin = formula('log.seed ~ mean.temperature')))
+#   
+#   output_fit_summary.basic = rbind(output_fit_summary.basic, output_fit_summary.temp.basic)
+#   
+#   
+# }

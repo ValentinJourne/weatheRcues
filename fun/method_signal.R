@@ -119,3 +119,178 @@ replace_0 <- function(vec, threshold) {
   
   return(result)
 }
+
+#' Identify Basic Weather Cues Using a Thresholding Algorithm
+#'
+#' This function identifies weather cues based on the `ThresholdingAlgo` for a specific site. It computes the relationship between slope and R-squared of a CSP method result, applies a thresholding algorithm to detect signal changes, and analyzes the climate data using a rolling window.
+#'
+#' @param lag Integer. The number of data points to consider for calculating thresholds in the thresholding algorithm (default is 100).
+#' @param threshold Numeric. The threshold for triggering signals in the `ThresholdingAlgo` function (default is 3).
+#' @param influence Numeric. The influence of new signals on the algorithm; set to 0 to avoid influence (default is 0).
+#' @param tolerancedays Integer. The number of days for gap tolerance when identifying sequences (default is 7).
+#' @param refday Integer. The reference day for climate data (default is 305).
+#' @param lastdays Integer. The total number of days used for the analysis (default is 600).
+#' @param rollwin Integer. The size of the rolling window for climate data smoothing (default is 1).
+#' @param siteforsub String. The unique identifier for the site (e.g., longitude and latitude).
+#' @param climate.beech.path String. The path to the directory containing the climate data.
+#' @param Results_CSPsub A data frame containing the results of a CSP method for a specific site, including slope and R-squared values.
+#' @param data A data frame containing biological data (e.g., seed production) with columns such as `plotname.lon.lat` and `Year`.
+#'
+#' @details
+#' The function applies the thresholding algorithm to detect signals from the product of slope and R-squared values from a CSP analysis. Identified signals are used to extract sequences of days, and these sequences are analyzed with respect to climate data using a rolling window approach.
+#'
+#' @return
+#' A data frame summarizing the fitted model for each identified weather cue window. If no signals are detected, the function will return a message indicating that no windows were identified.
+#'
+#' @examples
+#' \dontrun{
+#' # Example usage:
+#' basic_cues <- runing_basic_cues(lag = 100, 
+#'                                 threshold = 3, 
+#'                                 siteforsub = "longitude=-0.15_latitude=50.85",
+#'                                 climate.beech.path = "path/to/climate/data", 
+#'                                 Results_CSPsub = Results_CSPsub,
+#'                                 data = bio_data)
+#' }
+#'
+#' @export
+runing_basic_cues = function(lag  = 100,
+                             threshold = 3,
+                             influence = 0,
+                             tolerancedays = 7,
+                             refday = 305,
+                             lastdays = 600,
+                             rollwin = 1,
+                             siteforsub = "longitude=-0.15_latitude=50.85",
+                             climate.beech.path = climate.beech.path,
+                             Results_CSPsub = Results_CSPsub,
+                             data = data){
+  
+  #mostly similar strucutre to CSP methods 
+  list_slope <- as.list(Results_CSPsub$estimate)
+  list_rs <- as.list(Results_CSPsub$r.squared)
+  day = seq(rollwin,(lastdays-1),1)
+  slope = list_slope
+  r_s = list_rs
+  
+  #k = nrow(site)
+  temporary <- data.frame(slope = unlist(slope), 
+                          day = day, 
+                          r_s = unlist(r_s))
+  
+  data_beforesign = temporary %>% 
+    mutate(combo_r2_slope = r_s*slope) 
+  
+  y = data_beforesign$combo_r2_slope
+  
+  #use algo found on stakoverflow 
+  result <- ThresholdingAlgo(y,lag,threshold,influence)
+  
+  #now made them together
+  formatzek = data.frame(day = seq(rollwin,(lastdays-1),1),
+                         signal = replace_0((result$signals), threshold = tolerancedays)) %>% 
+    dplyr::filter(signal !=0)
+  
+  window.basic = as.vector(formatzek$day)
+  
+  #tolerance of 20 days gaps between 0 
+  sequences_days = extract_sequences_auto(window.basic, tolerance = tolerancedays) 
+  #i guess now will do the same shit as the other methods 
+  window_ranges_df <- save_window_ranges(sequences_days) %>% 
+    mutate(windows.sequences.number = 1:nrow(.))
+  
+  climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = siteforsub)
+  if((siteforsub == unique(Results_CSPsub$plotname.lon.lat))==F){
+    stop()
+  }
+  climate_csv <- qs::qread(climate_beech_unique) %>%
+    as.data.frame() %>%
+    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
+    mutate(date = foo(DATEB, 1949)) %>%
+    mutate(yday = lubridate::yday(date)) %>%
+    mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
+    mutate(TMEAN = as.numeric(TMEAN),
+           TMAX = as.numeric(TMAX),
+           TMIN = as.numeric(TMIN),
+           PRP = as.numeric(PRP)) %>%
+    mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
+    mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
+  
+  yearneed <- 2
+  yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
+  
+  # Apply the function across all years in yearperiod and combine results
+  rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
+                                      climate = climate_csv, 
+                                      yearneed = yearneed, 
+                                      refday = 305, 
+                                      lastdays = lastdays, 
+                                      rollwin = 1, 
+                                      variablemoving = 'TMEAN')
+  
+  output_fit_summary.temp.basic <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = data, 
+                                                                                                 window_ranges_df = window_ranges_df,
+                                                                                                 rolling.temperature.data = rolling.temperature.data,
+                                                                                                 myform.fin = formula('log.seed ~ mean.temperature')))
+  
+  
+}
+
+#' Apply Basic Cues Function to a Specific Site
+#'
+#' This function applies the `runing_basic_cues` method to analyze climate and seed data for a specific site. It identifies weather cues based on the provided results from a CSP analysis and climate data for the site.
+#'
+#' @param Results_CSPsub A data frame containing the results of the CSP method for the site, including slope and R-squared values.
+#' @param siteforsub String. The unique identifier for the site (e.g., longitude and latitude).
+#' @param Fagus.seed A data frame containing seed production data for Fagus (beech) trees, with site-specific information such as `plotname.lon.lat` and `Year`.
+#' @param climate.beech.path String. The path to the directory containing the climate data for the site.
+#' @param refday Integer. The reference day used for the analysis (default is 305).
+#' @param lastdays Integer. The total number of days used for the analysis (default is 600).
+#' @param rollwin Integer. The size of the rolling window for climate data smoothing (default is 1).
+#'
+#' @details
+#' The function filters the seed data for the specified site and applies the `runing_basic_cues` function to analyze the relationship between climate variables and biological data. It identifies key weather cues by applying a thresholding algorithm to the results of a CSP analysis.
+#'
+#' @return
+#' A data frame summarizing the fitted model for each identified weather cue window. If no signals are detected, the function will return a message indicating that no windows were identified.
+#'
+#' @examples
+#' \dontrun{
+#' # Example usage:
+#' cues_summary <- basiccues_function_site(Results_CSPsub = Results_CSPsub,
+#'                                         siteforsub = "longitude=-0.15_latitude=50.85",
+#'                                         Fagus.seed = Fagus.seed,
+#'                                         climate.beech.path = "path/to/climate/data",
+#'                                         refday = 305,
+#'                                         lastdays = 600,
+#'                                         rollwin = 1)
+#' }
+#'
+#' @seealso \code{\link{runing_basic_cues}}
+#'
+#' @import dplyr qs lubridate stringr purrr
+#' @export
+basiccues_function_site <- function(Results_CSPsub, 
+                                    siteforsub, 
+                                    Fagus.seed, 
+                                    climate.beech.path, 
+                                    refday, lastdays, rollwin) {
+  
+  # Filter the Fagus seed data by the site name
+  data.sub.fagus <- Fagus.seed %>%
+    dplyr::filter(plotname.lon.lat == siteforsub)
+  
+  # Run the CSP site analysis function
+  runing_basic_cues(data = data.sub.fagus,
+                    siteforsub = siteforsub,
+                    lag  = 100,
+                    threshold = 3,
+                    influence = 0,
+                    tolerancedays = 7,
+                    refday = 305,
+                    lastdays = 600,
+                    rollwin = 1,
+                    climate.beech.path = climate.beech.path,
+                    Results_CSPsub = Results_CSPsub)
+}
+
