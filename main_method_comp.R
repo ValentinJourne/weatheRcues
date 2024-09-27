@@ -74,7 +74,7 @@ Fagus.seed = initial.data.mastree %>%
   mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y"),
          plotname.lon.lat = paste0("longitude=",Longitude, "_","latitude=", Latitude)) %>% 
   group_by(plotname.lon.lat) %>%   
-  sample_frac(0.5) %>%        
+  #sample_frac(0.5) %>%        
   ungroup() %>% 
   as.data.frame()
 
@@ -227,18 +227,18 @@ ggplot(results.moving.site)+
 
 
 #create 61 list - 1 per site 
-Results_CSP = results.moving.site %>%
+Results_daily = results.moving.site %>%
   arrange(plotname.lon.lat) %>% 
   group_by(plotname.lon.lat) %>%
   group_split()
 
-nameCSP =   results.moving.site %>% 
+name_daily =   results.moving.site %>% 
   arrange(plotname.lon.lat) %>% 
   group_by(plotname.lon.lat) %>%
   group_keys()
 
 # Set names of the list based on group keys
-names(Results_CSP) <- apply(nameCSP, 1, paste)
+names(Results_daily) <- apply(name_daily, 1, paste)
 
 rollwin = 1
 lastdays = max(range)
@@ -246,10 +246,10 @@ myform.fin = formula('log.seed ~ mean.temperature')
 refday = 305
 
 statistics_csp_method = map_dfr(
-  1:length(Results_CSP), 
+  1:length(Results_daily), 
   ~CSP_function_site(
-    Results_CSP[[.]], 
-    unique(Results_CSP[[.]]$plotname.lon.lat),
+    Results_daily[[.]], 
+    unique(Results_daily[[.]]$plotname.lon.lat),
     Fagus.seed = Fagus.seed, 
     climate.beech.path = climate.beech.path,
     refday = 305,
@@ -362,26 +362,16 @@ cowplot::save_plot(here("figures/psr_allsites_methods.png"),psr.all.sites, ncol 
 quibble2(output_fit_summary.psr.best$window.close, q = c(0.25, 0.5, 0.75))
 quibble2(output_fit_summary.psr.best$window.open, q = c(0.25, 0.5, 0.75))
 
-
-
-
-
-output_fit_summary.basic = NULL
-#Results_CSP
-
-siteforsub = site[1]
-
-
-Results_CSPsub = Results_CSP[[i]]
-
-
-
-
+#####################################################################################
+######################################################################################################
+#####################################################################################
+####################################################################
+#SIMPLE METHOD TO IDENTIFY WEATHER CUES 
 statistics_basic_method = map_dfr(
-  1:length(Results_CSP), 
+  1:length(Results_daily), 
   ~basiccues_function_site(
-    Results_CSP[[.]], 
-    unique(Results_CSP[[.]]$plotname.lon.lat),
+    Results_daily[[.]], 
+    unique(Results_daily[[.]]$plotname.lon.lat),
     Fagus.seed = Fagus.seed, 
     climate.beech.path = climate.beech.path,
     refday = 305,
@@ -413,6 +403,36 @@ quibble2(output_fit_summary.basic.best$window.open, q = c(0.25, 0.5, 0.75))
 quibble2(output_fit_summary.basic.best$window.close, q = c(0.25, 0.5, 0.75))
 
 #put a long lag 
+windows.avg = output_fit_summary.basic.best %>% 
+  dplyr::select(sitenewname, window.open,  window.close) %>% 
+  mutate(method = 'signal.process') %>% 
+  bind_rows(output_fit_summary.psr.best%>% 
+              dplyr::select(sitenewname, window.open, window.close) %>% 
+              mutate(method = 'p.spline.reg')) %>% 
+  bind_rows(statistics_absolute_climwin %>% 
+              dplyr::select(sitenewname, WindowOpen, WindowClose) %>% rename(window.open = WindowOpen,
+                                                                             window.close = WindowClose) %>% 
+              mutate(method = 'climwin.abs')) %>% 
+  bind_rows(output_fit_summary.best.csp %>% 
+              dplyr::select(sitenewname, window.open , window.close) %>% 
+              mutate(method = 'climate.sens.profil') )%>%
+  group_by(method) %>%
+  summarise(wind.open_median = median(window.open, na.rm = TRUE),
+            wind.close_median = median(window.close, na.rm = TRUE),
+            wind.close_q25 = quantile(window.close, 0.3, na.rm = TRUE),
+            wind.close_q75 = quantile(window.close, 0.7, na.rm = TRUE),
+            wind.open_q25 = quantile(window.open, 0.3, na.rm = TRUE),
+            wind.open_q75 = quantile(window.open, 0.7, na.rm = TRUE))
+
+
+ggplot(windows.avg, aes(x = method)) +
+  #geom_crossbar(aes(ymin = wind.close_q25, ymax = wind.close_q75, y =wind.close_median ), 
+  #              width = 0.2, fill = "lightblue") +
+  geom_point(aes(y = wind.close_median), color = "darkblue", size = 3)+
+  #geom_crossbar(aes(ymin = wind.open_q25, ymax = wind.open_q75, y = wind.open_median), 
+  #              width = 0.2, fill = "lightgreen") +
+  geom_point(aes(y = wind.open_median), color = "darkgreen", size = 3)+
+  coord_flip()
 
 #GENERIC PLOT R2 and AIC
 bestr2 = output_fit_summary.basic.best %>% 
@@ -443,622 +463,3 @@ averagedensr2method = bestr2 %>%
 
 averagedensr2method
 cowplot::save_plot("averager2.method.png",averagedensr2method, ncol = 1, nrow = 1.4, dpi = 300)
-
-
-#now simple correlaation and extract window size based on the correlation 
-# sub.correlation.10days <- results.moving.site %>%
-#   group_by(sitenewname) %>%
-#   arrange(days.reversed) %>%
-#   mutate(
-#     max_corr_date = days.reversed[which.max(abs(correlation))]
-#   ) %>%
-#   filter(days.reversed >= max_corr_date - 10 & days.reversed <= max_corr_date + 10) %>%
-#   ungroup() %>%
-#   group_by(sitenewname) %>%
-#   filter(days.reversed == min(days.reversed) | days.reversed == max(days.reversed)) %>%
-#   ungroup()
-# 
-# #plot with simple correlation, extract top highest correlation , and then 10+- days before highest correlation
-# ggplot(sub.correlation.10days %>% dplyr::select(sitenewname, days.reversed) %>% 
-#          group_by(sitenewname) %>% 
-#          mutate(windows = 1:2) %>% 
-#          mutate(windows = ifelse(windows == 1, 'close', 'open')) %>% 
-#          pivot_wider(names_from = "windows", values_from = "days.reversed"))+
-#   geom_segment(aes(y = open, yend = close, x = sitenewname), size = 2) +
-#   coord_flip()+
-#   geom_hline(yintercept = 133, color = 'red')+
-#   geom_hline(yintercept = 498, color = 'red')+
-#   ylim(0,547)
-# 
-# stat.correlation = sub.correlation.10days %>% dplyr::select(sitenewname, days.reversed) %>% 
-#   group_by(sitenewname) %>% 
-#   mutate(windows = 1:2) %>% 
-#   mutate(windows = ifelse(windows == 1, 'close', 'open')) %>% 
-#   pivot_wider(names_from = "windows", values_from = "days.reversed")
-# quibble2(stat.correlation$open, q = c(0.25, 0.5, 0.75))
-# quibble2(stat.correlation$close, q = c(0.25, 0.5, 0.75))
-
-
-# 
-# quantile_threshold <- com.both %>%
-#   group_by(Partition) %>%
-#   summarize(combined_score_threshold = quantile(combined_score, 0.9, na.rm = TRUE))
-# 
-# 
-# days_combinationr2slope_threshold = com.both %>%
-#   left_join(quantile_threshold, by = "Partition") %>%  # Join the threshold back to the original data
-#   filter(combined_score >= combined_score_threshold) %>%    # Keep only rows where predicted slope meets/exceeds the threshold
-#   group_by(Partition) %>%
-#   summarize(min.day = min(day, na.rm = TRUE),
-#             max.day = max(day, na.rm = TRUE)) 
-# 
-# com.both <- com.both %>%
-#   group_by(Partition) %>% 
-#   mutate(cluster = kmeans(combined_score, centers = 5)$cluster)
-# 
-# (kmeans(com.both$combined_score, centers = 2))
-# 
-# days_combinationr2slope_threshold <- com.both %>%
-#   left_join(quantile_threshold, by = "Partition") %>%  
-#   filter(combined_score >= combined_score_threshold) %>%  # Filter based on the combined score threshold
-#   group_by(Partition, cluster) %>%  # Group by Partition and cluster
-#   summarize(min.day = min(day, na.rm = TRUE),
-#             max.day = max(day, na.rm = TRUE),
-#             .groups = 'drop')
-
-#testData <- temporary[-partitions[[i]], ]
-#rf_model_slope[[i]] <- randomForest(slope ~ day, data = trainData[[i]])
-#rf_model_r2[[i]] <- randomForest(r_s ~ day, data = trainData[[i]])
-#predict both for slope and r2 - use my combine to combine the different random forest models 
-# rf.all.slope <- my_combine(rf_model_slope[[1]], rf_model_slope[[2]], rf_model_slope[[3]], rf_model_slope[[4]] , rf_model_slope[[5]],
-#                      rf_model_slope[[6]], rf_model_slope[[7]], rf_model_slope[[8]], rf_model_slope[[9]] , rf_model_slope[[10]])
-#   
-# pred_slope = predict(rf.all.slope, newdata = temporary)
-#   
-# rf.all.slope <- my_combine(rf_model_r2[[1]], rf_model_r2[[2]], rf_model_r2[[3]], rf_model_r2[[4]] , rf_model_r2[[5]],
-#                              rf_model_r2[[6]], rf_model_r2[[7]], rf_model_r2[[8]], rf_model_r2[[9]] , rf_model_r2[[10]])
-# pred_r2 = predict(rf.all.slope, newdata = temporary)
-# 
-# predictions_slope <- data.frame(day = temporary$day, 
-#                                      actual_slope = temporary$slope, 
-#                                      predicted_slope = pred_slope)
-# 
-# predictions_r2 <- data.frame(day = temporary$day, 
-#                                   actual_r2 = temporary$r_s, 
-#                                   predicted_r2 = pred_r2)
-
-# Combine predictions from all partitions for slope
-#all_predictions_slope <- bind_rows(predictions_slope, .id = "Partition")%>% as_tibble()
-
-# Combine predictions from all partitions for r2
-#all_predictions_r2 <- bind_rows(predictions_r2, .id = "Partition") %>% as_tibble()
-#com = list(predictions_slope, predictions_r2)
-
-# Reformat the climate data
-# climate_csv <- read_csv(climate_beech_unique, col_types = cols(...1 = col_skip())) %>%
-#   mutate(Tmean = base::scale(Tmean),
-#          Prp = base::scale(Prp),
-#          across(c(Tmean, Prp), as.vector),
-#          date = as.Date(paste0(day,'/',month,'/', year), format = "%d/%m/%Y"),
-#          yday = lubridate::yday(date))
-
-#now for me try another alternaive - I want to identify huge peak of correlation 
-#the idea here is that we have seasonal changes of the correlation
-#i just want to identify the breakpoints instead of using a psecifc 10 days b-a windows 
-#install.packages("bfast", repos="http://R-Forge.R-project.org")
-# library(bfast)
-# set_default_options()    # use modifications, same as set_fast_options()
-# set_fallback_options()   # use default implementation
-# NDVIa <- as.ts(zoo(som$NDVI.a, som$Time))
-# f <- function() bfastmonitor(NDVIa, start = c(2010, 13)) 
-# 
-# set_fallback_options()
-# x = f() 
-# system.time(replicate(100, f()))
-# 
-# set_fast_options()
-# y = f()
-# system.time(replicate(100, f()))
-# 
-# par(mfrow = c(1,2))
-# plot(x) ; plot(y)
-# 
-# summary(x$model)
-# x$mefp
-# x$breakpoint
-# x$magnitude
-# x$history
-# x$monitor
-# outdir = "/Users/vjourne/Documents/GITprojects/weather_cues_method"
-# rmarkdown::render(system.file("reports/report.test.Rmd",package = "bfast"),output_file = paste(outdir,"/report.test.html",sep=""))
-# 
-# test = results.moving.site %>% 
-#   dplyr::filter(sitenewname == '413_1_FAGSYL') %>% 
-#   mutate(year = ifelse(days.reversed<365, 0, 1)) %>% 
-#   group_by(year) %>% 
-#   mutate(days = ifelse(year == 0, days.reversed, row_number())) %>% 
-#   ungroup() %>% 
-#   mutate(time = as.double(paste0(year, '.', sprintf("%03d", days))),
-#          timebis = as.double(paste0(0, '.', sprintf("%03d", days.reversed)))) %>% 
-#   as.data.frame()
-# 
-# suba <- as.ts(zoo(test$correlation, test$time))
-# f <- function() bfastmonitor(suba, 
-#                              #start = c(1.110),
-#                              start = c(0, 364)) 
-# set_fast_options()
-# y = f()
-# system.time(replicate(100, f()))
-# plot(y)
-#combine different random forest model based on different train dataset 
-
-# optimization.ml <- function(data,
-#                             num_partitions = 10,
-#                             partition_size = 0.8) {
-#   
-#   # Train Random Forest models
-#   #https://stackoverflow.com/questions/19170130/combining-random-forests-built-with-different-training-sets-in-r
-#   #https://stackoverflow.com/questions/70842819/is-there-an-r-function-in-the-ranger-package-that-can-combine-two-random-forest
-#   library(caret) #for parititon 
-#   library(ranger) #for rf (it takes weights in it eventually )
-#   
-#   set.seed(9999)
-#   #create x partition 
-#   partitions <- list()
-#   #do not specify list T in partitioon 
-#   for (i in 1:num_partitions) {
-#     trainIndex <- createDataPartition(data$day, p = partition_size, times = 1, list = F)
-#     partitions[[i]] <- trainIndex
-#   }
-#   # Train the model on each partition and make predictions
-#   trainData = list()
-#   #testData = list()
-#   #rf_model_slope = list()
-#   rf_model = list()
-#   predictions.ranger.data=NULL
-#   
-#   for (i in 1:num_partitions) {
-#     # Subset data into training and testing sets
-#     trainData[[i]] <- data[partitions[[i]], ]
-#     rf_model[[i]] <- ranger::ranger(
-#       #formula = slope ~ day, #this one max slope and take into account r2 as weights 
-#       formula = r_s ~ day, #i ends up with this, just because it maximise r2 
-#       data = trainData[[i]],
-#       #case.weights = trainData[[i]]$r_s,    # Include R2 as weights
-#       importance = "impurity"    
-#     )
-#     #do not forget to make prediction for the full dataset ! 
-#     predictions.ranger.data.temp = data.frame(sitenewname = unique(data$sitenewname),
-#                                               day = data$day, 
-#                                               actual_slope = data$slope, 
-#                                               actual_r2 = data$r_s,
-#                                               predicted_slope = predict(rf_model[[i]], data = data)$predictions,
-#                                               iter = i)
-#     predictions.ranger.data = rbind(predictions.ranger.data, predictions.ranger.data.temp)
-#     
-#   }
-#   
-#   #use ranger to make prediction on the full sampel   
-#   #have same actual r2 and day and slope 
-#   test.pred = predictions.ranger.data %>% 
-#     group_by(sitenewname, day, actual_r2, actual_slope) %>% 
-#     summarise(pred.avg = mean(predicted_slope))
-#   
-#   return(test.pred)
-# }
-# 
-# test.pred = optimization.ml(temporary,
-#                             num_partitions = 20,
-#                             partition_size = 0.8)
-
-# ggplot(test.pred, aes(x = day)) +
-#   geom_line(aes(y = actual_r2, color = "Actual Slope"), size = 1, linetype = "dashed") +
-#   geom_line(aes(y = pred.avg), size = 1) +
-#   theme_minimal() +
-#   theme(plot.title = element_text(hjust = 0.5),
-#         legend.position = 'none')
-# 
-# 
-# 
-# find.windows.optimal.valleys = function(data.prediction, #the one use for windows identification 
-#                                         rolling.temperature.data,#the data with rolling 
-#                                         quantilehigh = 0.9,
-#                                         minpeakdistance = 15,
-#                                         plot = FALSE){
-#   
-#   if(unique(data.prediction$sitenewname) != unique(rolling.temperature.data$sitenewname)){
-#     stop("Error: Not the same name between the prediction and the formatted data :(")
-#   }
-#   
-#   library(pracma)
-#   #use r pracma
-#   data_for_peaks <- data.prediction %>%
-#     ungroup() %>% 
-#     dplyr::select(day, pred.avg)
-#   #find peaks with pracma fuction 
-#   peaks <- findpeaks(abs(data_for_peaks$pred.avg), 
-#                      minpeakheight = quantile(abs(data_for_peaks$pred.avg), quantilehigh),
-#                      minpeakdistance = minpeakdistance) 
-#   peaks_df <- data_for_peaks[peaks[,2],] %>%
-#     mutate(peak_id = row_number())%>% 
-#     mutate(type = 'peak') 
-#   WinCloValley = data_for_peaks[peaks[,3],] %>%
-#     mutate(id = row_number())%>% 
-#     rename(windowsclose = 1) %>% 
-#     dplyr::select(windowsclose, id)
-#   WinOpValley = data_for_peaks[peaks[,4],] %>%
-#     mutate(id = row_number()) %>% 
-#     rename(windowsopen = 1,) %>% 
-#     dplyr::select(windowsopen, id)
-#   
-#   window_ranges_df = left_join(WinCloValley, WinOpValley) %>% 
-#     rename(windows.sequences.number = id)
-#   
-#   output_fit_summary.new = NULL
-#   for (z in 1:nrow(window_ranges_df)) {
-#     windowsopen <- window_ranges_df$windowsopen[z]
-#     windowsclose <- window_ranges_df$windowsclose[z]
-#     window_number <- window_ranges_df$windows.sequences.number[z]
-#     
-#     # Filter the rolling temperature data according to the current window range
-#     #does not change anything if sign different, just important the date smaller and bigger than
-#     climate_windows_best <- rolling.temperature.data %>%
-#       dplyr::filter(days.reversed <= windowsopen & days.reversed >= windowsclose) %>%
-#       group_by(sitenewname, year) %>%
-#       summarise(mean.temperature = mean(rolling_avg_tmean, na.rm = TRUE)) %>%
-#       ungroup() %>%
-#       mutate(window_number = window_number)  # Add the window number for identification
-#     
-#     #need to change year colnames :( 
-#     fit.best.model = bio_data %>% 
-#       rename(year = Year) %>% 
-#       left_join(climate_windows_best) %>%
-#       lm(myform.fin, data = .)
-#     
-#     intercept = tidy(fit.best.model)$estimate[1]
-#     intercept.se = tidy(fit.best.model)$std.error[1]
-#     estimate.model = tidy(fit.best.model)$estimate[2]
-#     estimate.se.model = tidy(fit.best.model)$std.error[2]
-#     pvalue.model = tidy(fit.best.model)$p.value[2]
-#     r2 = glance(fit.best.model)$r.squared
-#     AIC = glance(fit.best.model)$AIC
-#     nobs = glance(fit.best.model)$nobs
-#     nsequence.id = z
-#     
-#     output_fit_summary.temp.new <- data.frame(sitenewname = unique(bio_data$sitenewname),
-#                                               reference.day = refday,
-#                                               windows.size = rollwin,
-#                                               window.open = windowsopen,
-#                                               window.close = windowsclose,
-#                                               intercept = intercept,
-#                                               intercept.se = intercept.se,
-#                                               estimate = estimate.model,
-#                                               estimate.se = estimate.se.model,
-#                                               pvalue = pvalue.model,
-#                                               r2 = r2,
-#                                               AIC = AIC,
-#                                               nobs = nobs,
-#                                               nsequence.id = nsequence.id)
-#     output_fit_summary.new = rbind(output_fit_summary.new, output_fit_summary.temp.new)
-#     
-#   }
-#   if(plot == T){
-#     plott = ggplot(data_for_peaks, aes(x = day)) +
-#       geom_line(aes(y = pred.avg), size = 1) +
-#       theme_minimal() +
-#       theme(plot.title = element_text(hjust = 0.5),
-#             legend.position = 'none')+
-#       geom_vline(xintercept = c(peaks_df$day), col = 'red')+
-#       geom_vline(xintercept = c(WinCloValley$windowsclose), col = 'green')+
-#       geom_vline(xintercept = c(WinOpValley$windowsopen), col = 'blue')
-#     print(plott)
-#   }
-#   return(output_fit_summary.new)
-# }
-# 
-# 
-# 
-# ttt = find.windows.optimal.valleys(test.pred, #the one use for windows identification 
-#                                    rolling.temperature.data,#the data with rolling 
-#                                    quantilehigh = 0.9,
-#                                    minpeakdistance = 15, 
-#                                    plot = TRUE)
-# 
-# # 
-
-# for(i in 1:length(Results_CSP)){
-#   #subset the data, 
-#   #scale seed production and do logit transformation (will use this logit for climwin later)
-#   tible.sitelevel = Fagus.seed %>% #site = bio_data 
-#     dplyr::filter(plotname.lon.lat == unique(Results_CSP[[i]]$plotname.lon.lat))
-#   
-#   
-#   #now make subset and run regression
-#   list_slope <- as.list(Results_CSP[[i]]$estimate)
-#   list_rs <- as.list(Results_CSP[[i]]$r.squared)
-#   
-#   day = seq(rollwin,(lastdays-1),1)
-#   slope = list_slope
-#   r_s = list_rs
-#   #k = nrow(site)
-#   temporary <- data.frame(slope = unlist(slope), 
-#                           day = day, 
-#                           r_s = unlist(r_s))
-#   #use the function to optimize k 
-#   results <- optimize_and_fit_gam(temporary, optim.k = F, plots = F, k = (nrow(tible.sitelevel)-1) ) #(12+6) #I will specify just number of month 
-#   #one year and 6 month for 1.5 years 
-#   #get days windows 
-#   #need to add rollwin because it start at 1... 
-#   days = get_predictions_windows(slope_gam = results[[1]], 
-#                                  rs_gam = results[[2]], 
-#                                  temporary)$days
-#   
-#   sequences_days = extract_consecutive_sequences(days, keep_all = TRUE)
-#   
-#   
-#   
-#   climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = unique(Results_CSP[[i]]$plotname.lon.lat))
-#   
-#   
-#   climate_csv <- qs::qread(climate_beech_unique) %>%
-#     as.data.frame() %>%
-#     mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-#     mutate(date = foo(DATEB, 1949)) %>%
-#     mutate(yday = lubridate::yday(date)) %>%
-#     mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-#     mutate(TMEAN = as.numeric(TMEAN),
-#            TMAX = as.numeric(TMAX),
-#            TMIN = as.numeric(TMIN),
-#            PRP = as.numeric(PRP)) %>%
-#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
-#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
-#   
-#   # Define the year period
-#   yearneed <- 2
-#   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
-#   
-#   
-#   # Apply the function across all years in yearperiod and combine results
-#   #here the map dfr will basically do same as aplly by runing the function over all the time period we want 
-#   rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
-#                                       climate = climate_csv, 
-#                                       yearneed = yearneed, 
-#                                       refday = refday, 
-#                                       lastdays = lastdays, 
-#                                       rollwin = rollwin, 
-#                                       variablemoving = 'TMEAN')
-#   
-#   window_ranges_df <- save_window_ranges(sequences_days) %>% 
-#     mutate(windows.sequences.number = 1:nrow(.))
-#   
-#   
-#   # Loop through each window range in window_ranges_df
-#   #i need to do this because sometimes the algo identify more sequences of days 
-#   # Replacing the for loop with map_dfr for optimization
-#   
-#   output_fit_summary.temp <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = tible.sitelevel, 
-#                                                                                            rolling.temperature.data = rolling.temperature.data))
-#   output_fit_summary = rbind(output_fit_summary, output_fit_summary.temp)
-# }
-# 
-
-# t = NULL
-# for(i in 1:length(Results_CSP)){#
-#   #Results_CSP
-#   #i=20
-#   
-#   Results_CSPsub = Results_CSP[[i]]
-#   siteneame.forsub = unique(Results_CSP[[i]]$plotname.lon.lat)
-#   
-#   data.sub.fagus = Fagus.seed %>% #site = bio_data 
-#     dplyr::filter(plotname.lon.lat == siteneame.forsub)
-#   
-#   ttt = runing_csp_site(Results_CSPsub = Results_CSPsub,
-#                         data = data.sub.fagus,
-#                         siteneame.forsub = siteneame.forsub,
-#                         climate.beech.path = climate.beech.path,
-#                         refday = 305,
-#                         lastdays = max(range),
-#                         rollwin = 1)
-#   t = rbind(t, ttt)
-# }
-# 
-# for(p in 1:length(unique(Fagus.seed$sitenewname))){
-#   site = unique(Fagus.seed$plotname.lon.lat)[p]
-#   bio_data = Fagus.seed %>% 
-#     dplyr::filter(plotname.lon.lat == site )
-#   
-#   #bio_data$seeds <- bio_data$log.seed
-#   #climate 
-#   climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern =site)
-#   
-#   
-#   climate_csv <- qs::qread(climate_beech_unique) %>%
-#     as.data.frame() %>%
-#     mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-#     mutate(date = foo(DATEB, 1949)) %>%
-#     mutate(yday = lubridate::yday(date)) %>%
-#     mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-#     mutate(TMEAN = as.numeric(TMEAN),
-#            TMAX = as.numeric(TMAX),
-#            TMIN = as.numeric(TMIN),
-#            PRP = as.numeric(PRP)) %>%
-#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
-#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
-#   
-#   # need climate data to be arranged with year as row
-#   # need to reduce climate dataframe to only year, yday and temp
-#   climate2 <- data.frame(year = climate_csv$year, yday = climate_csv$yday, temp = climate_csv[,covariates.of.interest])
-#   tempmat <- climate2 %>% spread(, key = yday, value = temp)
-#   tempmat <- tempmat[,-1]
-#   #number years monitoring seeds 
-#   ny<-length(bio_data$Year)
-#   nt<-tot_days-1
-#   ## Formatting data
-#   #based on Simmonds et al code
-#   index.matrix=matrix(1:nt,ny,nt,byrow=TRUE)
-#   # Define the year period
-#   yearneed <- 2
-#   #will fiter the year period here to the year needeed 
-#   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
-#   
-#   # Apply the function across all years in yearperiod and combine results
-#   rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
-#                                       climate = climate_csv, 
-#                                       yearneed = yearneed, 
-#                                       refday = 305, 
-#                                       lastdays = tot_days, 
-#                                       rollwin = 1, 
-#                                       variablemoving = covariates.of.interest)
-#   
-#   #merge data seed to moving climate
-#   tible.sitelevel = bio_data %>% #site = bio_data 
-#     rename(year = Year) %>% 
-#     left_join(rolling.temperature.data) %>% 
-#     drop_na(!!sym('rolling_avg_tmean'))
-#   
-#   climate2 <- data.frame(year = tible.sitelevel$year, 
-#                          yday = tible.sitelevel$days.reversed, 
-#                          temp = tible.sitelevel$rolling_avg_tmean)
-#   covariate.matrix = climate2 %>%
-#     spread(key = yday, value = temp) %>%
-#     dplyr::select(-year) %>%                    
-#     as.matrix()    
-#   covariate.matrix <- unname(as.matrix(covariate.matrix))
-#   
-#   #second order, but from https://link.springer.com/article/10.1007/s00484-007-0141-4
-#   #it is possible to adjust between 1-3 (instead of 2) like c(1,1) instead of c(2,1)
-#   #here I specify to 0 instead of 1 as in SImmonds et al, meaning that I have no penaties on slope
-#   #if using 1 instead of 0, the model is not able to identify a cues 
-#   #and I think it is normal and ok to be more flexible because we might have multiple peaks with time 
-#   #So if I want to specify K = 30, for example it is working 
-#   #not if knots are too low 
-#   #which make sense when looking https://link.springer.com/article/10.1007/s00484-011-0472-z 
-#   if(is.null(knots) ){
-#     K = ny-1
-#     model<-mgcv::gam(log.seed~s(index.matrix,k=K,m=matrice,bs="ps",by=covariate.matrix), 
-#                      data = bio_data, method="GCV.Cp")
-#     summary(model)
-#   }else{
-#     model<-gam(log.seed~s(index.matrix,k=K,m=c(2,1),bs="ps",by=covariate.matrix), 
-#                data = bio_data, method="GCV.Cp")
-#     summary(model)}
-#   
-#   
-#   plotted <- plot(model, ylab = c('partial effect'), xlab = c('days prior tree growth'))
-#   coefs <- data.frame(fit = plotted[[1]]$fit)
-#   #"The most important days of temperature influence on phenology in the year may be identified by as those 
-#   #with partial coefficients greater than or less than zero by more than two times their standard error."
-#   #I corrected here, rounding values create issues 
-#   #marker <- c(which(coefs$fit > round((1.96*sd(coefs$fit))+mean(coefs$fit),2)), 
-#   #            which(coefs$fit < round((1.96*sd(coefs$fit))-mean(coefs$fit),2)))
-#   # marker <- c(
-#   #    which(coefs$fit > (1.96 * sd(coefs$fit) + mean(coefs$fit))), 
-#   #    which(coefs$fit < (1.96 * sd(coefs$fit) - mean(coefs$fit)))
-#   #  )
-#   
-#   #wihtout rounding now, will provide different output, and adjust by what is in the main study . 
-#   #In the case of Simmods et al, was certainly ok, but not here, since obs are not days////
-#   upper_limit <- mean(coefs$fit) + (1.96 * sd(coefs$fit))
-#   lower_limit <- mean(coefs$fit) - (1.96 * sd(coefs$fit))
-#   
-#   # Find the markers (days) where the fit exceeds the threshold
-#   marker <- which(coefs$fit > upper_limit | coefs$fit < lower_limit)
-#   
-#   if(length(marker) == 0){
-#     output_fit_summary.psr.temp = data.frame(sitenewname = unique(bio_data$sitenewname),
-#                                              plotname.lon.lat = unique(bio_data$plotname.lon.lat),
-#                                              reference.day = refday,
-#                                              windows.size = NA, 
-#                                              window.open = NA, window.close = NA, intercept = NA,
-#                                              intercept.se = NA, estimate = NA, estimate.se = NA,
-#                                              pvalue = NA, r2 = NA, AIC = NA, nobs = ny,
-#                                              nsequence.id = NA)
-#   }else{
-#     window <- round(plotted[[1]]$x[find_concurrent_period(marker, coefs)])
-#     
-#     #here does not work because not consecutive 
-#     #extract_consecutive_sequences(window, keep_all = T) 
-#     sequences_days = extract_sequences_auto(window, tolerance = tolerancedays) 
-#     #i guess now will do the same shit as the other methods 
-#     window_ranges_df <- save_window_ranges(sequences_days) %>% 
-#       mutate(windows.sequences.number = 1:nrow(.))
-#     
-#     output_fit_summary.psr.temp <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = bio_data, 
-#                                                                                                  window_ranges_df = window_ranges_df,
-#                                                                                                  rolling.temperature.data = rolling.temperature.data,
-#                                                                                                  myform.fin = formula('log.seed ~ mean.temperature')))
-#     
-#   }
-#   
-#   output_fit_summary.psr = rbind(output_fit_summary.psr, output_fit_summary.psr.temp)
-#   
-#   
-# }
-# 
-
-# for(i in 1:length(Results_CSP)){
-#   
-#   site.name = unique(Results_CSP[[i]]$plotname.lon.lat)
-#   
-#   #first reformat data 
-#   bio_data <- Fagus.seed %>%
-#     filter(plotname.lon.lat == site.name) %>%
-#     as.data.frame() 
-#   
-#   # Climate load and format
-#   climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = site.name)
-#   # Reformat the climate data
-#   climate_csv <- qs::qread(climate_beech_unique) %>%
-#     as.data.frame() %>%
-#     mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-#     mutate(date = foo(DATEB, 1949)) %>%
-#     mutate(yday = lubridate::yday(date)) %>%
-#     mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-#     mutate(TMEAN = as.numeric(TMEAN),
-#            TMAX = as.numeric(TMAX),
-#            TMIN = as.numeric(TMIN),
-#            PRP = as.numeric(PRP)) %>%
-#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
-#     mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
-#   
-#   # Define the year period
-#   yearneed <- 2
-#   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
-#   
-#   # Apply the function across all years in yearperiod and combine results
-#   rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
-#                                       climate = climate_csv, 
-#                                       yearneed = yearneed, 
-#                                       refday = 305, 
-#                                       lastdays = lastdays, 
-#                                       rollwin = 1, 
-#                                       variablemoving = 'TMEAN')
-#   
-#   #now load data related to lm ~ days ~ provide r2 and slope 
-#   
-#   
-#   result <- ThresholdingAlgo(y,lag,threshold,influence)
-#   
-#   #now made them together
-#   formatzek = data.frame(day = seq(rollwin,(lastdays-1),1),
-#                          signal = replace_0((result$signals), threshold = tolerancedays)) %>% 
-#     dplyr::filter(signal !=0)
-#   
-#   window.basic = as.vector(formatzek$day)
-#   
-#   #tolerance of 20 days gaps between 0 
-#   sequences_days = extract_sequences_auto(window.basic, tolerance = tolerancedays) 
-#   #i guess now will do the same shit as the other methods 
-#   window_ranges_df <- save_window_ranges(sequences_days) %>% 
-#     mutate(windows.sequences.number = 1:nrow(.))
-#   
-#   output_fit_summary.temp.basic <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = bio_data, 
-#                                                                                                  window_ranges_df = window_ranges_df,
-#                                                                                                  rolling.temperature.data = rolling.temperature.data,
-#                                                                                                  myform.fin = formula('log.seed ~ mean.temperature')))
-#   
-#   output_fit_summary.basic = rbind(output_fit_summary.basic, output_fit_summary.temp.basic)
-#   
-#   
-# }
