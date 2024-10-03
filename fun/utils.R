@@ -693,3 +693,9 @@ my_combine <- function (...)
   rf
 }
 
+#calcuate standard error 
+se <- function(x){
+  x2 <- na.omit(x)
+  n <- length(x2)
+  sd(x2)/sqrt(n)
+}
