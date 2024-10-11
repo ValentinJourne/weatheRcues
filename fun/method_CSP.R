@@ -515,7 +515,7 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
   siteneame.forsub.climate = unique(Results_CSPsub$plotname.lon.lat)
   climate_unique <- list.files(path = climate.path, full.names = TRUE, pattern = siteneame.forsub.climate)
   
-  if((siteneame.forsub == unique(data$sitenewname))==F){
+  if((siteneame.forsub == unique(data$sitenewname)|siteneame.forsub == unique(data$plotname.lon.lat))==F){
     stop()
   }
   
@@ -596,7 +596,7 @@ CSP_function_site <- function(Results_CSPsub,
   
   # Filter the Fagus seed data by the site name
   data.sub.fagus <- seed.data %>%
-    dplyr::filter(sitenewname == siteneame.forsub)
+    dplyr::filter(sitenewname == siteneame.forsub | plotname.lon.lat == siteneame.forsub)
   
   # Run the CSP site analysis function
   runing_csp_site(Results_CSPsub = Results_CSPsub,

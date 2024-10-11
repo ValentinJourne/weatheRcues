@@ -243,12 +243,13 @@ lastdays = max(range)
 myform.fin = formula('log.seed ~ mean.temperature')
 refday = 305
 
+
 statistics_csp_method = map_dfr(
   1:length(Results_daily), 
   ~CSP_function_site(
     Results_daily[[.]], 
     unique(Results_daily[[.]]$plotname.lon.lat),
-    Fagus.seed = Fagus.seed, 
+    seed.data = Fagus.seed %>% arrange(plotname.lon.lat), 
     climate.path = climate.beech.path,
     refday = 305,
     lastdays = 600,
@@ -363,6 +364,7 @@ quibble2(output_fit_summary.psr.best$window.open, q = c(0.25, 0.5, 0.75))
 #####################################################################################
 ####################################################################
 #SIMPLE METHOD TO IDENTIFY WEATHER CUES 
+#here I am using this only for fagus...
 statistics_basic_method = map_dfr(
   1:length(Results_daily), 
   ~basiccues_function_site(
