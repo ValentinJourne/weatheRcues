@@ -8,7 +8,7 @@
 #'baseline = lm(log.seed~1, data = data)
 #'but double check you have the proper response name variable
 #'
-#' @param climate.beech.path A character string specifying the path to the directory containing
+#' @param climate.path A character string specifying the path to the directory containing
 #' the climate data files. The function searches for files matching the `site.name` pattern in this directory.
 #' @param data A data frame containing biological data including seed production and relevant metadata.
 #' It should include columns for `Date2` and `sitenewname`.
@@ -43,13 +43,13 @@
 #' @examples
 #' # Example usage:
 #' # result <- climwin_site_days(
-#' #   climate.beech.path = "path/to/climate/data",
+#' #   climate.path = "path/to/climate/data",
 #' #   data = biological_data,
 #' #   site.name = "site1"
 #' # )
 #'
 #' @export
-climwin_site_days <- function(climate.beech.path,
+climwin_site_days <- function(climate.path,
                               data,
                               site.name,
                               range = c(600, 0),
@@ -66,7 +66,7 @@ climwin_site_days <- function(climate.beech.path,
   
   
   # Filter climate data for the site
-  climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = site.name)
+  climate_beech_unique <- list.files(path = climate.path, full.names = TRUE, pattern = site.name)
   if(length(climate_beech_unique) == 0) stop("You missed the file matching site name.")
   
   # Reformat the climate data, here it is a qs file, but you can change if you have different type files
@@ -108,7 +108,7 @@ climwin_site_days <- function(climate.beech.path,
   # Extract the summary for the best model
   broom_summary <- broom::tidy(climwin_output[[1]]$BestModel) %>%
     filter(term == 'climate') %>%
-    select(-term)
+    dplyr::select(-term)
   
   # Extract performance statistics and combine with site information
   statistics <- bind_cols(

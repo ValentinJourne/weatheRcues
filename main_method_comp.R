@@ -14,11 +14,6 @@ library(ggspatial)
 library(ggsci)
 
 
-source('utils.R')
-source('method_CSP.R')
-source('method_climwin.R')
-source('method_signal.R')
-
 functions <- list.files(here("fun"), full.names = T) %>%
   purrr::map(source)
 
@@ -163,7 +158,7 @@ if(run.climwin==T){
   statistics_absolute_climwin = future_map_dfr(
     beech.site.all, 
     ~ climwin_site_days(
-      climate.beech.path = climate.beech.path,
+      climate.path = climate.beech.path,
       data = Fagus.seed %>% 
         filter(plotname.lon.lat == .x),  # Use .x correctly here
       site.name = .x,
@@ -215,8 +210,8 @@ quibble2(statistics_absolute_climwin$WindowClose, q = c(0.25, 0.5, 0.75))
 
 
 #it is still useful for me because here I will also work with simple correlation later 
-results.moving.site = FULL.moving.climate.analysis(Fagus.seed = Fagus.seed,
-                             climate.beech.path = climate.beech.path,
+results.moving.site = FULL.moving.climate.analysis(seed.data = Fagus.seed,
+                             climate.path = climate.beech.path,
                              refday = 305,
                              lastdays = max(range),
                              rollwin = 1)
@@ -254,7 +249,7 @@ statistics_csp_method = map_dfr(
     Results_daily[[.]], 
     unique(Results_daily[[.]]$plotname.lon.lat),
     Fagus.seed = Fagus.seed, 
-    climate.beech.path = climate.beech.path,
+    climate.path = climate.beech.path,
     refday = 305,
     lastdays = 600,
     rollwin = 1
@@ -319,9 +314,8 @@ statistics_psr_method = map_dfr(
   site, 
   ~ PSR_function_site(
     site = .x,
-    Fagus.seed = Fagus.seed,  # Use .x correctly here
+    seed.data = Fagus.seed,  # Use .x correctly here
     tot_days = max(range),
-    lastdays = 600,
     matrice = c(3,1),
     knots = NULL
   )
@@ -333,7 +327,7 @@ ggplot(statistics_psr_method %>%
          group_by(sitenewname) %>% 
          slice(which.max(r2)))+
   geom_segment(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
-  geom_point(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
+  geom_point(aes(y = window.open, x = sitenewname), size = 2) +
   coord_flip()+
   geom_hline(yintercept = 133, color = 'red')+
   geom_hline(yintercept = 498, color = 'red')+
@@ -348,9 +342,8 @@ psr.all.sites =  output_fit_summary.psr.best%>%
   arrange(Collection_method) %>% 
   mutate(sitenewname = forcats::fct_reorder(sitenewname, Collection_method)) %>%
   ggplot()+
-  geom_segment(aes(y = window.open, yend = window.close, x = sitenewname, col = Collection_method), size = 2, shape = 15) +
+  geom_segment(aes(y = window.open, yend = window.close, x = sitenewname, col = Collection_method), size = 2) +
   geom_point(aes(y = window.open, x = sitenewname, col = Collection_method), size = 2, shape = 15) +
-  
   coord_flip()+
   geom_hline(yintercept = 133, color = 'red')+
   geom_hline(yintercept = 498, color = 'red')+
@@ -482,6 +475,11 @@ averagedensr2method = bestr2 %>%
 
 averagedensr2method
 cowplot::save_plot(here("figures/averager2.method.png"),averagedensr2method+median.windows.plot, ncol = 1.8, nrow = 1.4, dpi = 300)
+
+
+####################################################################################
+##############################################################################
+#STOP HERE FOR NOW
 
 ####################################################################################
 ##############################################################################
@@ -729,142 +727,177 @@ sensi.data.plot = windows.avg.sensitivity %>%
 sensi.data.plot
 cowplot::save_plot(here("figures/sensitivity.method.png"),sensi.data.plot, ncol = 1.4, nrow = 1.4, dpi = 300)
 
-###############################################################
-##########################################
-#####################IN PROGRESS
-#problem solved it requires to use only weekly dataset :D 
-climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE)[1]
 
-climate_csv_noscaling <- qs::qread(climate_beech_unique) %>%
-  as.data.frame() %>%
-  mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-  mutate(date = foo(DATEB, 1949)) %>%
-  mutate(yday = lubridate::yday(date)) %>%
-  mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-  mutate(TMEAN = as.numeric(TMEAN),
-         TMAX = as.numeric(TMAX),
-         TMIN = as.numeric(TMIN),
-         PRP = as.numeric(PRP))
 
-# Function to calculate Cool Temperature Signal (CU)
-calculate_CU <- function(temperature_data, nd, ni, C_threshold) {
+################################
+#example with all quercus robur petraea and spp (hybrid)
+Quercus.seed = initial.data.mastree %>%
+  filter(!Variable == "flower" & VarType == "C" & !Unit=="index" & !Variable == "pollen") %>% 
+  group_by(Species, VarType) %>% 
+  mutate(nMax = n()) %>% 
+  filter(str_detect(Species, 'Quercus robur|Quercus petraea|Quercus spp.')) %>% 
+  filter(!str_detect(Country, 'United States of America|Russian Federation (the)')) %>% 
+  #filter(Unit == "seeds/m2" | Unit == "seeds/individual") %>% 
+  filter(Year > 1952 & Year < 2021) %>% 
+  mutate(sitenewname= paste0(Alpha_Number, "_",Site_number, "_", Species_code)) %>% 
+  group_by(sitenewname) %>% 
+  mutate(log.seed = log(1+Value),
+         scale.seed = scale(Value),
+         n = n()) %>% 
+  filter(n > 20) %>% #initially 14
+  mutate() %>% 
+  mutate(Date = paste0( "15/06/",Year)) %>% 
+  mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y"),
+         plotname.lon.lat = paste0("longitude=",Longitude, "_","latitude=", Latitude)) %>% 
+  group_by(plotname.lon.lat) %>%   
+  #sample_frac(0.5) %>%        
+  ungroup() %>% 
+  as.data.frame()
+
+quercus.site.all = unique(Quercus.seed$plotname.lon.lat)
+#they have same length, each sites are unique here! 
+
+# Define a function to process each site
+#I want the function to work only for one site
+#option to run in parallel to make it faster
+run.climwin <- T
+#take some time ! 
+if(run.climwin==T){
+  library(furrr)#make it in parallele, https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html
+  plan(multisession)#background R sessions (on current machine) , the computer is flying (alt cluster)
   
-  # Check that there is enough data for the calculation
-  if (length(temperature_data) < (nd + ni)) {
-    stop("Not enough temperature data for the specified accumulation period (nd + ni).")
-  }
-  
-  # Initialize a vector to store CU values
-  CU_values <- numeric(length(temperature_data) - (nd + ni) + 1)
-  
-  # Loop over the temperature data, calculating the CU for each time point
-  for (t in (nd + ni):length(temperature_data)) {
-    # Initialize the CU for this time point
-    CU_t <- 0
-    
-    # Sum over the range n_d to n_d + n_i - 1
-    for (n in nd:(nd + ni - 1)) {
-      # Calculate the difference between threshold and temperature at time t - n
-      temp_diff <- C_threshold - temperature_data[t - n]
-      
-      # Accumulate only the positive differences
-      CU_t <- CU_t + max(0, temp_diff)
-    }
-    
-    # Store the CU value at time t
-    CU_values[t - (nd + ni) + 1] <- CU_t
-  }
-  
-  # Return the calculated CU values for each time point
-  return(CU_values)
-}
-
-# Number of exclusion days (nd)
-nd <- 90
-# Number of accumulation days (ni)
-ni <- 20
-# Threshold temperature (C_threshold)
-C_threshold <- 1
-
-# Calculate the CU signal
-CU_signal <- calculate_CU(temperature_data = climate_csv_noscaling$TMEAN, nd, ni, C_threshold)
-hist(CU_signal)
-
-library(phenor)
-data = climate_csv_noscaling %>% 
-  mutate(Ti = TMEAN,
-         doy = yday)
-
-par = c(ni, nd, C_threshold, 10)
-CU(par = par, data = data)
-https://github.com/bluegreen-labs/phenor/blob/master/R/phenology_models.R
-
-Fd <- apply(data$Ti, 2, function(x){
-  Fi <- zoo::rollapply(data$Ti, ni, sum, align = "right", fill = 0, na.rm = TRUE)
-  Fd <- c(rep(0,nd),Fi[1:(length(Fi) - nd)])
-})
+  statistics_absolute_climwin_quercus = future_map_dfr(
+    quercus.site.all, 
+    ~ climwin_site_days(
+      climate.path = climate.beech.path,
+      data = Quercus.seed %>% 
+        filter(plotname.lon.lat == .x),  # Use .x correctly here
+      site.name = .x,
+      range = range,
+      cinterval = 'day',
+      refday = c(01, 11),
+      optionwindows = 'absolute',
+      climate_var = 'TMEAN'
+    )
+  )
+  qs::qsave(statistics_absolute_climwin_quercus, 
+            here('statistics_absolute_climwin_QUERCUS.qs'))}else{
+              statistics_absolute_climwin_quercus = qs::qread('statistics_absolute_climwin_QUERCUS.qs')
+            }
 
 
+format.quercus.win = statistics_absolute_climwin_quercus %>% 
+  dplyr::select(sitenewname, estimate, WindowOpen, WindowClose) %>% 
+  pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
+  left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed)) 
 
 
-y.transf.betareg <- function(y){
-  n.obs <- sum(!is.na(y))
-  (y * (n.obs - 1) + 0.5) / n.obs
-}
-
-seed.site = Fagus.seed %>% 
-  filter(plotname.lon.lat == 'longitude=-0.15_latitude=50.85') %>% 
-  rename(year = Year) %>% 
-  mutate(seed01 = (Value - min(Value, na.rm = T))/(max(Value)-min(Value, na.rm = T))) %>% 
-  mutate(scalingbeta = y.transf.betareg(seed01)) %>% 
-  mutate(binary = ifelse(scalingbeta> .2, 1, 0)) %>% 
-  mutate(year = year - 1) #need to shift to one year before 
+methods.collection.quercus = Quercus.seed %>% dplyr::select(sitenewname, Country, Collection_method, Length, Longitude, Latitude) %>% distinct()
 
 
+format.quercus.win %>% dplyr::select(sitenewname, estimate, name, days.reversed) %>% 
+  pivot_wider(names_from = "name", values_from = "days.reversed") %>% 
+  mutate(sign = ifelse(estimate >0 , '+', '-')) %>% 
+  left_join(methods.collection.quercus) %>% 
+  arrange(Latitude) %>% 
+  mutate(sitenewname = forcats::fct_reorder(sitenewname, Collection_method)) %>%
+  ggplot()+
+  geom_segment(aes(y = WindowOpen, yend = WindowClose, x = sitenewname), size = 2) +
+ # geom_point(aes(y = WindowOpen, x = sitenewname, col = Collection_method), size = 2) +
+  coord_flip()+
+  geom_hline(yintercept = 133, color = 'red')+
+  geom_hline(yintercept = 498, color = 'red')+
+  ylim(0,600)+
+  scale_color_brewer(palette = "Dark2")+
+  scale_fill_brewer(palette = "Dark2")
 
-data.cu = climate_csv_noscaling %>% 
-  bind_cols(c(rep(NA, ni+nd-1), CU_signal)) %>% 
-  rename(CU.units = last_col())
+plot_locations.quercus<- st_as_sf(Quercus.seed %>% 
+                            dplyr::select(Longitude, Latitude, plotname.lon.lat, Collection_method) %>% distinct(), coords = c("Longitude", "Latitude")) %>% 
+  st_set_crs(4326)
 
-ggplot(data.cu, aes(x = date, y = CU.units))+geom_line()
+Maps.quercus <- ggplot(data=mapBase$geometry)+ 
+  geom_sf(fill = "grey", colour = "grey")+ #plot map of France
+  xlab(" ")+ ylab(" ")+ #white or aliceblue
+  #geom_sf(data = faguseuforgen, col = "#FFDB6D", fill = "#FFDB6D", alpha = 0.55, linewidth = .35)+
+  geom_point(data = plot_locations.quercus %>%  mutate(x = unlist(map(geometry,1)),
+                                               y = unlist(map(geometry,2)))%>% 
+               as.data.frame(), aes(x = x , y = y, col = Collection_method, fill = Collection_method), 
+             stroke = 1, alpha = .8,
+             shape = 21, size = 4.3)+ #size = rmse,
+  scale_size_continuous(
+    breaks = c(0.1,0.3,0.8),
+    range = c(0,7)
+  )+
+  coord_sf(xlim = c(-10, 25), ylim = c(40, 60))+
+  scale_y_continuous(breaks = c(40, 50, 60, 70))+
+  scale_x_continuous(breaks = c(-10, 0, 10, 20))+
+  ylab("Latitude")+xlab("Longitude")+
+  ggpubr::theme_pubr()+
+  scale_color_brewer(palette = "Dark2")+
+  scale_fill_brewer(palette = "Dark2")+
+  guides(col = "none", fill=guide_legend(title=NULL, override.aes = list(size=8)))
+Maps.quercus
 
-data.cu %>% 
-  group_by(year) %>% 
-  summarise(mean.cu = mean(CU.units, na.rm = T))%>% 
-  right_join(seed.site) %>% 
-  ggplot(aes(x=year, y = mean.cu))+geom_point()
+#test csp 
+results.moving.site.quercus = FULL.moving.climate.analysis(Fagus.seed = Quercus.seed,
+                                                   climate.path = climate.beech.path,
+                                                   refday = 305,
+                                                   lastdays = max(range),
+                                                   rollwin = 1)
+Results_daily.quercus = results.moving.site.quercus %>%
+  arrange(sitenewname) %>% 
+  group_by(sitenewname) %>%
+  group_split()
 
-data.cu %>% 
-  group_by(year) %>% 
-  summarise(mean.cu = mean(CU.units, na.rm = T))%>% 
-  right_join(seed.site) %>% 
-  ggplot(aes(x = mean.cu, y = binary))+geom_point()
+name_daily.quercus =   results.moving.site.quercus %>% 
+  arrange(sitenewname) %>% 
+  group_by(sitenewname) %>%
+  group_keys()
 
-library(betareg)
-data.year = data.cu %>% 
-  group_by(year) %>% 
-  summarise(mean.cu = mean(CU.units, na.rm = T)) %>% 
-  right_join(seed.site)
-beta = betareg(scalingbeta~mean.cu, data = data.year)
+# Set names of the list based on group keys
+names(Results_daily.quercus) <- apply(name_daily.quercus, 1, paste)
 
-summary(beta)
-probit_model <- glm(binary ~ CU.units, family = binomial(link = "probit"), data = data.year)
+statistics_csp_method.quercus = map_dfr(
+  1:length(Results_daily.quercus), 
+  ~CSP_function_site(
+    Results_daily.quercus[[.]], 
+    unique(Results_daily.quercus[[.]]$sitenewname),
+    Fagus.seed = Quercus.seed%>% 
+      arrange(sitenewname), 
+    climate.path = climate.beech.path,
+    refday = 305,
+    lastdays = 600,
+    rollwin = 1
+  ))
 
-predicted_probs <- predict(probit_model, type = "response")
-plot(predicted_probs)
+statistics_csp_method.quercus %>%
+  group_by(sitenewname) %>% 
+  dplyr::slice(which.max(r2))  %>% 
+  left_join(methods.collection.quercus) %>% 
+  ungroup() %>% 
+  #arrange(Collection_method) %>% 
+  mutate(sitenewname = forcats::fct_reorder(sitenewname, Collection_method)) %>%
+  ggplot()+
+  geom_segment(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
+  coord_flip()+
+  geom_hline(yintercept = 133, color = 'red')+
+  geom_hline(yintercept = 498, color = 'red')+
+  ylim(0,600)+
+  scale_color_brewer(palette = "Dark2")+
+  scale_fill_brewer(palette = "Dark2")
 
-predict(probit_model)
-ggpredict(probit_model)
+statistics_csp_method.quercus %>%
+  group_by(sitenewname) %>% 
+  dplyr::slice(which.max(r2)) %>% 
+  dplyr::select(sitenewname, r2) %>% 
+  mutate(method = 'CSP') %>% 
+  bind_rows(statistics_absolute_climwin_quercus %>% 
+              dplyr::select(sitenewname, R2) %>% 
+              rename(r2 = R2) %>% 
+              mutate(method = 'climwin')) %>% 
+  ggplot(aes(x = r2, fill = method)) +
+  geom_density(alpha = 0.4) +
+  labs(x = "R-squared (r2)", y = "Density") +
+  ggpubr::theme_pubclean()+
+  theme(legend.position = c(.9, .8))
 
-result <- GenSA(init,run_GDD,lower=c(50,1,1),upper=c(1000,10,200),data,
-                tempmat,control=list(temperature=10000,maxit=2000))
-
-#t0, Fcrit, T50, Dt, Ccrit, Tbase, a , b , c
-parametersAbies = c(-67, 9, 15.2, 0.24, 144.6, 1.61, -27.1, -4.95)
-T_base = 2
-C_crit = 145
-
-R_c <- ifelse(phenoyear$meanTemp < T_base, 1, 0) 
-phenoyear$R_c <- R_c
-tCrow <- which.min((cumsum(phenoyear$R_c) >= C_crit)==FALSE) #select last FALSE, meaning that C crit is acquired 
-DOYtC <- phenoyear[tCrow,]$DOYn #select DOY when arrived at the threshold

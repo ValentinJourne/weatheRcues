@@ -8,7 +8,7 @@
 #'
 #' @param bio_data A data frame containing biological data with columns such as `Year`, `plotname.lon.lat`, and `log.seed`.
 #' @param site A string representing the site name, which should match the `plotname.lon.lat` in `bio_data`.
-#' @param climate.beech.path A string representing the path to the climate data files (e.g., daily temperature data).
+#' @param climate.path A string representing the path to the climate data files (e.g., daily temperature data).
 #' @param tot_days Integer specifying the total number of days to include in the analysis (default is 600).
 #' @param refday Integer representing the reference day (default is 305). This is the day from which the climate data is tracked backward.
 #' @param rollwin Integer representing the size of the rolling window for calculating the rolling averages (default is 1).
@@ -33,7 +33,7 @@
 #' climate_path <- "path_to_climate_data/"
 #' result <- runing_psr_site(bio_data = bio_data, 
 #'                           site = site, 
-#'                           climate.beech.path = climate_path, 
+#'                           climate.path = climate_path, 
 #'                           tot_days = 600, 
 #'                           refday = 305, 
 #'                           rollwin = 1, 
@@ -48,7 +48,7 @@
 #' @export
 runing_psr_site = function(bio_data = bio_data,
                            site = site,
-                           climate.beech.path = here('climate_dailyEOBS/'),
+                           climate.path = here('climate_dailyEOBS/'),
                            tot_days = 600,
                            refday = 305,
                            rollwin = 1,
@@ -63,8 +63,8 @@ runing_psr_site = function(bio_data = bio_data,
     stop()
   }
   #path clim
-  climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern =site)
-  climate_csv <- qs::qread(climate_beech_unique) %>%
+  climate_unique <- list.files(path = climate.path, full.names = TRUE, pattern =site)
+  climate_csv <- qs::qread(climate_unique) %>%
     as.data.frame() %>%
     mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
     mutate(date = foo(DATEB, 1949)) %>%
@@ -124,6 +124,7 @@ runing_psr_site = function(bio_data = bio_data,
     model<-mgcv::gam(log.seed~s(index.matrix,k=K,m=matrice,bs="ps",by=covariate.matrix), 
                      data = bio_data, method="GCV.Cp")
     summary(model)
+    
   }else{
     model<-gam(log.seed~s(index.matrix,k=K,m=c(2,1),bs="ps",by=covariate.matrix), 
                data = bio_data, method="GCV.Cp")
@@ -170,8 +171,8 @@ runing_psr_site = function(bio_data = bio_data,
 
 #' This function applies the PSR (Penalized Spline Regression) method to identify weather cues for a specific site using biological data. The function is based on methods adapted from Simmonds et al. It filters data for a particular site and calls the `runing_psr_site` function to analyze the climate and biological data.
 #'
-#' @param site A string representing the site name, which should match the `plotname.lon.lat` in `Fagus.seed`.
-#' @param Fagus.seed A data frame containing biological data (e.g., seed production) with columns such as `plotname.lon.lat`, `Year`, and `log.seed`.
+#' @param site A string representing the site name, which should match the `plotname.lon.lat` in `seed.data`.
+#' @param seed.data A data frame containing biological data (e.g., seed production) with columns such as `plotname.lon.lat`, `Year`, and `log.seed`.
 #' @param tot_days Integer specifying the total number of days to include in the analysis (default is 600).
 #' @param lastdays Integer specifying the final day for the analysis (usually the length of the time series).
 #' @param matrice A numeric vector of length 2 indicating the penalties to apply in the smoothing function of the model (default is `c(3,1)`).
@@ -187,9 +188,9 @@ runing_psr_site = function(bio_data = bio_data,
 #' \dontrun{
 #' # Example usage:
 #' site <- "site_name"
-#' Fagus.seed <- your_fagus_data
+#' seed.data <- your_fagus_data
 #' result <- PSR_function_site(site = site,
-#'                             Fagus.seed = Fagus.seed,
+#'                             seed.data = seed.data,
 #'                             tot_days = 600,
 #'                             lastdays = 600,
 #'                             matrice = c(3,1),
@@ -198,20 +199,20 @@ runing_psr_site = function(bio_data = bio_data,
 #'
 #' @export
 PSR_function_site <- function(site, 
-                              Fagus.seed, 
+                              seed.data, 
                               tot_days,
-                              lastdays, 
+                              #lastdays, 
                               matrice = c(3,1),
                               knots = NULL) {
   
   # Filter the Fagus seed data by the site name
-  data.sub.fagus <- Fagus.seed %>%
+  data.sub.fagus <- seed.data %>%
     dplyr::filter(plotname.lon.lat == site)
   
   # Run the CSP site analysis function
   runing_psr_site(bio_data = data.sub.fagus,
                   site = site,
-                  climate.beech.path = here('climate_dailyEOBS/'),
+                  climate.path = here('climate_dailyEOBS/'),
                   tot_days = 600,
                   refday = 305,
                   rollwin = 1,

@@ -261,8 +261,8 @@ runing.movingwin.analysis = function(data = data,
   
   correlation.all <- tible.sitelevel %>% 
     nest(data = -days.reversed) %>%
-    mutate(correlation = map(data, ~cor.test(y=.$log.seed, x=.[[covariates.of.interest]], method = method)$estimate)) %>% 
-    mutate(pvalue.cor = map(data, ~cor.test(y=.$log.seed, x=.[[covariates.of.interest]], method = method)$p.value))
+    mutate(correlation = purrr::map(data, ~cor.test(y=.$log.seed, x=.[[covariates.of.interest]], method = method)$estimate)) %>% 
+    mutate(pvalue.cor = purrr::map(data, ~cor.test(y=.$log.seed, x=.[[covariates.of.interest]], method = method)$p.value))
   
   
   cortemp = correlation.all %>% 
@@ -300,9 +300,9 @@ runing.movingwin.analysis = function(data = data,
 #'
 #' This function performs a moving window analysis on seed and climate data for a specific site. It involves loading and formatting climate data, applying rolling window functions or not if set rolling at 1 - as done in our study, and then running a moving window analysis to investigate the relationship between seed count and climate variables.
 #'
-#' @param site.name A string specifying the site name for which to perform the analysis. This should match entries in the `plotname.lon.lat` column of `Fagus.seed`.
-#' @param Fagus.seed A data frame containing seed count and site-level information, including `plotname.lon.lat` and `log.seed`.
-#' @param climate.beech.path A string specifying the path to the directory containing climate data files. These files should include the site name in their names.
+#' @param site.name A string specifying the site name for which to perform the analysis. This should match entries in the `plotname.lon.lat` column of `seed.data`.
+#' @param seed.data A data frame containing seed count and site-level information, including `plotname.lon.lat` and `log.seed`.
+#' @param climate.path A string specifying the path to the directory containing climate data files. These files should include the site name in their names.
 #' @param lastdays An integer specifying the number of days to consider in the rolling window analysis.
 #' @param myform A formula specifying the model to fit for each moving window. Default is `formula('log.seed~rolling_avg_tmean')`.
 #'
@@ -332,27 +332,28 @@ runing.movingwin.analysis = function(data = data,
 #'
 #' result <- site.moving.climate.analysis(
 #'   site.name = site_name,
-#'   Fagus.seed = Fagus_seed,
-#'   climate.beech.path = climate_beech_path,
+#'   seed.data = Fagus_seed,
+#'   climate.path = climate_beech_path,
 #'   lastdays = last_days,
 #'   myform = my_form
 #' )
 #'
 site.moving.climate.analysis <- function(site.name, 
-                                         Fagus.seed, 
-                                         climate.beech.path, 
+                                         seed.data, 
+                                         climate.path, 
                                          lastdays, 
                                          myform) {
   # Load the biological data for the site
-  bio_data <- Fagus.seed %>%
-    filter(plotname.lon.lat == site.name) %>%
+  bio_data <- seed.data %>%
+    filter(sitenewname == site.name) %>%
     as.data.frame() 
   
+  site.name.climate = unique(bio_data$plotname.lon.lat)
   # Climate load and format
-  climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = site.name)
+  climate_unique <- list.files(path = climate.path, full.names = TRUE, pattern = site.name.climate)
   
   
-  climate_csv <- qs::qread(climate_beech_unique) %>%
+  climate_csv <- qs::qread(climate_unique) %>%
     as.data.frame() %>%
     mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
     mutate(date = foo(DATEB, 1949)) %>%
@@ -389,10 +390,10 @@ site.moving.climate.analysis <- function(site.name,
 
 #' Main Function of correlation - regression and process accross all sites
 #'
-#' This function applies the moving climate analysis to all sites listed in the `Fagus.seed` data frame. It iterates over each site, performs the moving window analysis, and combines the results into a single data frame.
+#' This function applies the moving climate analysis to all sites listed in the `seed.data` data frame. It iterates over each site, performs the moving window analysis, and combines the results into a single data frame.
 #'
-#' @param Fagus.seed A data frame containing seed count and site-level information. It should include a column `plotname.lon.lat` to specify site names and a column `log.seed` for seed counts.
-#' @param climate.beech.path A string specifying the path to the directory containing climate data files. These files should be named according to the site names.
+#' @param seed.data A data frame containing seed count and site-level information. It should include a column `plotname.lon.lat` to specify site names and a column `log.seed` for seed counts.
+#' @param climate.path A string specifying the path to the directory containing climate data files. These files should be named according to the site names.
 #' @param refday An integer representing the reference day for the rolling window analysis. Default is 305.
 #' @param lastdays An integer specifying the number of days to include in the rolling window analysis. Default is the maximum of a specified range.
 #' @param rollwin An integer specifying the rolling window size. Default is 1.
@@ -400,7 +401,7 @@ site.moving.climate.analysis <- function(site.name,
 #' @details
 #' The function performs the following steps:
 #' \itemize{
-#'   \item Identifies unique site names from the `Fagus.seed` data frame.
+#'   \item Identifies unique site names from the `seed.data` data frame.
 #'   \item Applies the `site.moving.climate.analysis` function to each site using the unique site names.
 #'   \item Combines the results from all sites into a single data frame.
 #' }
@@ -416,24 +417,24 @@ site.moving.climate.analysis <- function(site.name,
 #' )
 #' climate_beech_path <- 'path/to/climate/data'
 #' result <- FULL.moving.climate.analysis(
-#'   Fagus.seed = Fagus_seed,
-#'   climate.beech.path = climate_beech_path,
+#'   seed.data = Fagus_seed,
+#'   climate.path = climate_beech_path,
 #'   refday = 305,
 #'   lastdays = 30,
 #'   rollwin = 1
 #' )
 #'
-FULL.moving.climate.analysis <- function(Fagus.seed = Fagus.seed,
-                                         climate.beech.path = climate.beech.path,
+FULL.moving.climate.analysis <- function(seed.data = seed.data,
+                                         climate.path = climate.path,
                                          refday = 305,
                                          lastdays = max(range),
                                          rollwin = 1) {
-  al.sites <- unique(Fagus.seed$plotname.lon.lat)
+  al.sites <- unique(seed.data$sitenewname)
   
   results.moving <- map_dfr(al.sites, 
                             ~site.moving.climate.analysis(site.name = .x, 
-                                                          Fagus.seed = Fagus.seed, 
-                                                          climate.beech.path = climate.beech.path,                            
+                                                          seed.data = seed.data, 
+                                                          climate.path = climate.path,                            
                                                           lastdays = lastdays,
                                                           myform = formula('log.seed~rolling_avg_tmean')))
   
@@ -448,7 +449,7 @@ FULL.moving.climate.analysis <- function(Fagus.seed = Fagus.seed,
 #' @param Results_CSPsub A subset of the `Results_CSP` data frame for a specific site. 
 #' @param data A data frame containing site-level data, typically including seed production and climate-related variables.
 #' @param siteneame.forsub A string representing the name of the site to subset from the `Results_CSP` data and climate data.
-#' @param climate.beech.path A string specifying the file path to the folder containing the climate data files.
+#' @param climate.path A string specifying the file path to the folder containing the climate data files.
 #' @param refday An integer specifying the reference day (default is 305).
 #' @param lastdays An integer representing the last day of the range used for the analysis (default is the maximum of the range).
 #' @param rollwin An integer specifying the size of the rolling window used for calculating temperature averages (default is 1).
@@ -472,9 +473,9 @@ FULL.moving.climate.analysis <- function(Fagus.seed = Fagus.seed,
 #' \dontrun{
 #' # Example usage:
 #' output <- runing_csp_site(Results_CSPsub = Results_CSP[i],
-#'                           data = Fagus.seed,
+#'                           data = seed.data,
 #'                           siteneame.forsub = "site_123",
-#'                           climate.beech.path = "/path/to/climate/data")
+#'                           climate.path = "/path/to/climate/data")
 #' }
 #'
 #' @import dplyr
@@ -485,7 +486,7 @@ FULL.moving.climate.analysis <- function(Fagus.seed = Fagus.seed,
 runing_csp_site = function(Results_CSPsub = Results_CSPsub,
                            data = data,
                            siteneame.forsub = siteneame.forsub,
-                           climate.beech.path = climate.beech.path,
+                           climate.path = climate.path,
                            refday = 305,
                            lastdays = max(range),
                            rollwin = 1){
@@ -511,13 +512,14 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
   window_ranges_df <- save_window_ranges(sequences_days) %>% 
     mutate(windows.sequences.number = 1:nrow(.))
   
-  climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = siteneame.forsub)
+  siteneame.forsub.climate = unique(Results_CSPsub$plotname.lon.lat)
+  climate_unique <- list.files(path = climate.path, full.names = TRUE, pattern = siteneame.forsub.climate)
   
-  if((siteneame.forsub == unique(data$plotname.lon.lat))==F){
+  if((siteneame.forsub == unique(data$sitenewname))==F){
     stop()
   }
   
-  climate_csv <- qs::qread(climate_beech_unique) %>%
+  climate_csv <- qs::qread(climate_unique) %>%
     as.data.frame() %>%
     mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
     mutate(date = foo(DATEB, 1949)) %>%
@@ -555,14 +557,14 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
 #'
 #' @param Results_CSPsub A subset of results for a specific site. Typically a data frame or list that contains climate and seed-related estimates.
 #' @param siteneame.forsub A character string indicating the site name (longitude and latitude) used to filter the seed dataset.
-#' @param Fagus.seed A data frame containing seed data for multiple sites, including columns like `plotname.lon.lat` that are used to filter for a specific site.
-#' @param climate.beech.path A string specifying the file path to the climate data related to beech trees.
+#' @param seed.data A data frame containing seed data for multiple sites, including columns like `plotname.lon.lat` that are used to filter for a specific site.
+#' @param climate.path A string specifying the file path to the climate data related to seed production in trees.
 #' @param refday An integer representing the reference day of the year used to align the rolling climate window.
 #' @param lastdays An integer representing the total number of days for the climate window analysis.
 #' @param rollwin An integer specifying the size of the rolling window for the climate data (number of days to average).
 #'
 #' @details
-#' This function filters the provided `Fagus.seed` data by the site specified in `siteneame.forsub` and 
+#' This function filters the provided `seed.data` data by the site specified in `siteneame.forsub` and 
 #' then runs the `runing_csp_site` function with the filtered seed data, climate data, and other parameters. 
 #' The `runing_csp_site` function processes climate data within a rolling window to find relationships between 
 #' climate signals and seed data.
@@ -577,8 +579,8 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
 #' CSP_function_site(
 #'   Results_CSPsub = Results_CSP[[1]], 
 #'   siteneame.forsub = "51.0_10.0", 
-#'   Fagus.seed = Fagus.seed, 
-#'   climate.beech.path = "data/climate_beech", 
+#'   seed.data = seed.data, 
+#'   climate.path = "data/climate_beech", 
 #'   refday = 305, 
 #'   lastdays = 600, 
 #'   rollwin = 1
@@ -588,19 +590,19 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
 #' @export
 CSP_function_site <- function(Results_CSPsub, 
                               siteneame.forsub, 
-                              Fagus.seed, 
-                              climate.beech.path, 
+                              seed.data, 
+                              climate.path, 
                               refday, lastdays, rollwin) {
   
   # Filter the Fagus seed data by the site name
-  data.sub.fagus <- Fagus.seed %>%
-    dplyr::filter(plotname.lon.lat == siteneame.forsub)
+  data.sub.fagus <- seed.data %>%
+    dplyr::filter(sitenewname == siteneame.forsub)
   
   # Run the CSP site analysis function
   runing_csp_site(Results_CSPsub = Results_CSPsub,
                   data = data.sub.fagus,
                   siteneame.forsub = siteneame.forsub,
-                  climate.beech.path = climate.beech.path,
+                  climate.path = climate.path,
                   refday = refday,
                   lastdays = lastdays,   # Change from max(range) to lastdays
                   rollwin = rollwin)
