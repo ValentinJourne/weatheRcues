@@ -25,6 +25,9 @@ if(new.folder == TRUE){
   dir.create(here('figures'))
 }
 
+#access climate zip file 
+#https://osf.io/287ms/ and add it in climate_dailyEOBS folder
+
 nfile = check_folder_and_contents(here('climate_dailyEOBS'), file_pattern = '.qs')
 if(nfile$folder_exists == FALSE){stop(print('missing folder climate_dailyEOBS'))}
 if(length(nfile$files_present) == 0){stop(print('missing file to add in the folder of interest name climate_dailyEOBS'))}
