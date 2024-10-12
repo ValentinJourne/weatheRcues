@@ -699,3 +699,26 @@ se <- function(x){
   n <- length(x2)
   sd(x2)/sqrt(n)
 }
+
+format_climate_data <- function(site,
+                                path,
+                                scale.climate = TRUE) {
+  climate_data <- qs::qread(list.files(path = path, full.names = TRUE, pattern = site)) %>%
+    as.data.frame() %>%
+    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
+    mutate(date = foo(DATEB, 1949)) %>%  
+    mutate(yday = yday(date),
+           year = year(date)) %>%
+    mutate(TMEAN = as.numeric(TMEAN),
+           TMAX = as.numeric(TMAX),
+           TMIN = as.numeric(TMIN),
+           PRP = as.numeric(PRP))
+  
+  if (scale.climate) {
+    climate_data <- climate_data %>%
+      mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale)) %>%
+      mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
+  }
+ 
+  return(climate_data)
+}

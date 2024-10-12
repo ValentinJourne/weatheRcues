@@ -35,7 +35,7 @@ if(length(nfile$files_present) == 0){stop(print('missing file to add in the fold
 
 # I am generating calendar 
 #double check values
-calendar = goingbackpastdayscalendar(refday = 305,
+calendar = goingbackpastdayscalendar(refday = 305, #double check later, because climwin start at 1 or 0
                                      lastdays = 600, 
                                      yearback = 2) %>% 
   filter(YEAR == 1950) %>% 
@@ -151,28 +151,35 @@ beech.site.all = unique(Fagus.seed$plotname.lon.lat)
 
 # Define a function to process each site
 #I want the function to work only for one site
-#option to run in parallel to make it faster
+#option to run in parallel to make it faster (faster than map_dfr, but need double checking because if not well defined = issues)
 run.climwin <- F
 #take some time ! 
 if(run.climwin==T){
   library(furrr)#make it in parallele, https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html
   plan(multisession)#background R sessions (on current machine) , the computer is flying (alt cluster)
-
-  statistics_absolute_climwin = future_map_dfr(
+  
+  statistics_absolute_climwin <- future_map_dfr(
     beech.site.all, 
-    ~ climwin_site_days(
-      climate.path = climate.beech.path,
-      data = Fagus.seed %>% 
-        filter(plotname.lon.lat == .x),  # Use .x correctly here
-      site.name = .x,
-      range = range,
-      cinterval = 'day',
-      refday = c(01, 11),
-      optionwindows = 'absolute',
-      climate_var = 'TMEAN'
-    )
+    ~ {
+      # format the climate, .x is the current site
+      climate_data <- format_climate_data(site = .x ,
+                                          path = climate.beech.path, 
+                                          scale.climate = T)  
+      # Run climwin per site
+      climwin_site_days(
+        climate_data = climate_data,
+        data = Fagus.seed %>% filter(plotname.lon.lat == .x),  
+        site.name = .x,  
+        range = range,
+        cinterval = 'day',
+        refday = c(01, 11),  
+        optionwindows = 'absolute',  
+        climate_var = 'TMEAN'  
+      )
+    }
   )
-  qs::qsave(statistics_absolute_climwin, 
+  
+qs::qsave(statistics_absolute_climwin, 
             here('statistics_absolute_climwin.qs'))}else{
   statistics_absolute_climwin = qs::qread('statistics_absolute_climwin.qs')
             }
@@ -246,7 +253,7 @@ lastdays = max(range)
 myform.fin = formula('log.seed ~ mean.temperature')
 refday = 305
 
-
+#map dfr is enough, quite fast if not optimize gam model 
 statistics_csp_method = map_dfr(
   1:length(Results_daily), 
   ~CSP_function_site(
@@ -906,3 +913,102 @@ statistics_csp_method.quercus %>%
   ggpubr::theme_pubclean()+
   theme(legend.position = c(.9, .8))
 
+
+########################################################################
+####################################################################################
+########################################################################
+############################################################
+######MAKE simulation study case with climwin 
+
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+
+# Simulate climate data: assume daily data for 20 years
+set.seed(123)  
+startyear = 1940
+years <- startyear:2020
+days_per_year <- 365
+climate_data <- data.frame(
+  date = seq.Date(from = as.Date(paste0(startyear,"-01-01")), by = "day", length.out = length(years) * days_per_year),
+  temp = runif(length(years) * days_per_year, min = 10, max = 30)  # random temperatures
+)
+  
+climate_data <- climate_data %>%
+  mutate(year = format(date, "%Y"),
+         day_of_year = yday(date),
+         year = as.numeric(year))
+
+# Select ~ one week in June 
+june_week <- climate_data %>%
+  filter(day_of_year >= 150 & day_of_year <= 160)
+
+#then make it strongly correlated to the climate window
+seed_production <- june_week %>%
+  group_by(year) %>%
+  summarise(mean_temp_june_week = mean(temp)) %>%
+  mutate(seed_production = log(round(mean_temp_june_week * 5 + 50))) %>%  # A deterministic scaling formula for count data
+  filter(year > startyear)%>%
+  mutate(year = as.numeric(as.character(year))) %>% 
+  mutate(Date = paste0( "15/06/",year)) %>% #need a date, even if absolute window
+  mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y")) #make it as in the climate date
+
+
+# Check correlation between seed production and June week temperature
+correlation_value <- cor(seed_production$seed_production, seed_production$mean_temp_june_week);correlation_value
+
+# Visualize seed production vs. June week temperature
+ggplot(seed_production, aes(x = mean_temp_june_week, y = seed_production)) +
+  geom_point(color = "blue", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  ggtitle("Seed Production (Perfect Correlation) vs June Week Temperature") +
+  xlab("Mean Temperature (June Week)") +
+  ylab("Seed Production (Count Data)") +
+  theme_minimal()
+
+# Histogram of the seed production counts to visualize the distribution
+ggplot(seed_production, aes(x = exp(seed_production))) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black", alpha = 0.7) +
+  ggtitle("Distribution of Seed Production (Count Data with Perfect Correlation)")
+
+climwin_output_simulation <- climwin::slidingwin(
+  xvar = list(temperature.degree = climate_data$temp),
+  cdate = climate_data$date,
+  bdate = seed_production$Date2,
+  baseline = lm(seed_production~1, data = seed_production),#i Needed to specify the formula here, if not it is not working properly
+  cinterval = 'day',
+  range = c(400, 0),
+  refday = c(01, 11),
+  type = 'absolute',
+  stat = "mean",
+  cmissing = 'method2',
+  func = "lin"
+)
+climwin_output_simulation
+
+MassOutput <- climwin_output_simulation[[1]]$Dataset
+library(climwin)
+plotall(dataset = climwin_output_simulation[[1]]$Dataset,
+        bestmodel = climwin_output_simulation[[1]]$BestModel, 
+        bestmodeldata = climwin_output_simulation[[1]]$BestModelData)
+
+climwin_output_simulation$combos %>% 
+  dplyr::select(WindowOpen, WindowClose) %>% 
+  pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
+  left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed)) 
+
+#climwin need to adjust for 0 - 1, row start at 0 and not 1 
+calendar = goingbackpastdayscalendar(refday = 304,
+                                     lastdays = 400, 
+                                     yearback = 2) %>% 
+  filter(YEAR == 1950) %>% 
+  dplyr::select(MONTHab, DOY, days.reversed) %>% 
+  mutate(datefake  = as.Date(DOY, origin = "1948-01-01"),
+         day.month = format(datefake,"%m-%d"), 
+         year = case_when(
+           days.reversed < 366 ~ 1,
+           days.reversed >= 366 & days.reversed < 730 ~ 2,
+           days.reversed >= 730 & days.reversed < 1095 ~ 3,
+           TRUE ~ 4))

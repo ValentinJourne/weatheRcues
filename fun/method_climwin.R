@@ -49,9 +49,9 @@
 #' # )
 #'
 #' @export
-climwin_site_days <- function(climate.path,
+climwin_site_days <- function(climate_data,
                               data,
-                              site.name,
+                              site.name, #character will be added in the final form file
                               range = c(600, 0),
                               cinterval = 'day',
                               refday = c(01, 11),
@@ -66,25 +66,10 @@ climwin_site_days <- function(climate.path,
   
   
   # Filter climate data for the site
-  climate_beech_unique <- list.files(path = climate.path, full.names = TRUE, pattern = site.name)
-  if(length(climate_beech_unique) == 0) stop("You missed the file matching site name.")
-  
-  # Reformat the climate data, here it is a qs file, but you can change if you have different type files
-  #climate_csv <- read_csv(climate_beech_unique, col_types = cols(...1 = col_skip())) %>%
-  climate_data <- qs::qread(climate_beech_unique) %>%
-    as.data.frame() %>%
-    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-    mutate(date = foo(DATEB, 1949)) %>%
-    mutate(yday = lubridate::yday(date)) %>%
-    mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-    mutate(TMEAN = as.numeric(TMEAN),
-           TMAX = as.numeric(TMAX),
-           TMIN = as.numeric(TMIN),
-           PRP = as.numeric(PRP)) %>%
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
-  
-  if(nrow(climate_data)==0)stop("Your file seems to be not in the good shape. Please grab a cup of tea or coffee")
+  #if(length(climate_beech_unique) == 0) stop("You missed the file matching site name.")
+  if(nrow(climate_data)==0)stop("Your climate file seems to be not in the good shape. Please grab a cup of tea or coffee")
+  if(nrow(data)==0)stop("Your bio data file seems to be not in the good shape. Please grab a cup of tea or coffee")
+  #if(is.na(climate_var)==T)stop("Please specify your climate variable use")
   
   # Load the biological data for the site
   data <- data  %>% 
@@ -95,7 +80,7 @@ climwin_site_days <- function(climate.path,
     xvar = list(temperature.degree = climate_data[[climate_var]]),
     cdate = climate_data$date,
     bdate = data$Date2,
-    baseline = lm(log.seed~1, data = data),#i Needed to specify the formula here, if not it is not working properly
+    baseline = lm(log.seed~1, data = data),#i Needed to specify the formula here, if not it is not working properly (with future_map)
     cinterval = cinterval,
     range = range,
     type = optionwindows,

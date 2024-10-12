@@ -338,41 +338,17 @@ runing.movingwin.analysis = function(data = data,
 #'   myform = my_form
 #' )
 #'
-site.moving.climate.analysis <- function(site.name, 
-                                         seed.data, 
-                                         climate.path, 
+site.moving.climate.analysis <- function(bio_data, 
+                                         climate.data, 
                                          lastdays, 
                                          myform) {
-  # Load the biological data for the site
-  bio_data <- seed.data %>%
-    filter(sitenewname == site.name) %>%
-    as.data.frame() 
-  
-  site.name.climate = unique(bio_data$plotname.lon.lat)
-  # Climate load and format
-  climate_unique <- list.files(path = climate.path, full.names = TRUE, pattern = site.name.climate)
-  
-  
-  climate_csv <- qs::qread(climate_unique) %>%
-    as.data.frame() %>%
-    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-    mutate(date = foo(DATEB, 1949)) %>%
-    mutate(yday = lubridate::yday(date)) %>%
-    mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-    mutate(TMEAN = as.numeric(TMEAN),
-           TMAX = as.numeric(TMAX),
-           TMIN = as.numeric(TMIN),
-           PRP = as.numeric(PRP)) %>%
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
-  
   # Define the year period
   yearneed <- 2
-  yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
+  yearperiod <- (min(climate.data$year) + yearneed):max(climate.data$year)
   
   # Apply the function across all years in yearperiod and combine results
   rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
-                                      climate = climate_csv, 
+                                      climate = climate.data, 
                                       yearneed = yearneed, 
                                       refday = 305, 
                                       lastdays = lastdays, 
@@ -424,19 +400,38 @@ site.moving.climate.analysis <- function(site.name,
 #'   rollwin = 1
 #' )
 #'
-FULL.moving.climate.analysis <- function(seed.data = seed.data,
+FULL.moving.climate.analysis <- function(seed.data.all = seed.data.all,
                                          climate.path = climate.path,
                                          refday = 305,
                                          lastdays = max(range),
                                          rollwin = 1) {
-  al.sites <- unique(seed.data$sitenewname)
   
-  results.moving <- map_dfr(al.sites, 
-                            ~site.moving.climate.analysis(site.name = .x, 
-                                                          seed.data = seed.data, 
-                                                          climate.path = climate.path,                            
-                                                          lastdays = lastdays,
-                                                          myform = formula('log.seed~rolling_avg_tmean')))
+  # Get the list of unique site names from seed data
+  al.sites <- unique(seed.data.all$sitenewname)
+  
+  # Iterate over each site and perform the moving climate analysis
+  results.moving <- map_dfr(al.sites, function(site.name) {
+    
+    # Filter biological data for the current site
+    bio_data <- seed.data.all %>%
+      filter(sitenewname == site.name) %>%
+      as.data.frame() 
+    
+    # format climate
+    climate_data <- format_climate_data(
+      site = unique(bio_data$plotname.lon.lat), 
+      path = climate.path, 
+      scale.climate = TRUE
+    )
+    
+    # run csp site level
+    site.moving.climate.analysis(
+      bio_data = bio_data, 
+      climate.data = climate_data, 
+      lastdays = lastdays,
+      myform = formula('log.seed ~ rolling_avg_tmean')
+    )
+  })
   
   return(results.moving)
 }
@@ -486,10 +481,12 @@ FULL.moving.climate.analysis <- function(seed.data = seed.data,
 runing_csp_site = function(Results_CSPsub = Results_CSPsub,
                            data = data,
                            siteneame.forsub = siteneame.forsub,
-                           climate.path = climate.path,
+                           option.check.name = TRUE,
+                           climate_csv = climate_csv,
                            refday = 305,
                            lastdays = max(range),
-                           rollwin = 1){
+                           rollwin = 1,
+                           optim.k = F){
   
   
   list_slope <- as.list(Results_CSPsub$estimate)
@@ -503,7 +500,8 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
                           day = day, 
                           r_s = unlist(r_s))
   
-  results <- optimize_and_fit_gam(temporary, optim.k = F, plots = F, k = (nrow(data)-1) ) #(12+6) #I will specify just number of month 
+  #do not optimize, too long 
+  results <- optimize_and_fit_gam(temporary, optim.k = optim.k, plots = F, k = (nrow(data)-1) ) #(12+6) #I will specify just number of month 
   
   days = get_predictions_windows(slope_gam = results[[1]], 
                                  rs_gam = results[[2]], 
@@ -512,25 +510,16 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
   window_ranges_df <- save_window_ranges(sequences_days) %>% 
     mutate(windows.sequences.number = 1:nrow(.))
   
-  siteneame.forsub.climate = unique(Results_CSPsub$plotname.lon.lat)
-  climate_unique <- list.files(path = climate.path, full.names = TRUE, pattern = siteneame.forsub.climate)
-  
-  if((siteneame.forsub == unique(data$sitenewname)|siteneame.forsub == unique(data$plotname.lon.lat))==F){
-    stop()
+  if(option.check.name == T){
+    if((siteneame.forsub == unique(data$sitenewname)|siteneame.forsub == unique(data$plotname.lon.lat))==F){
+      stop()
+    }
   }
   
-  climate_csv <- qs::qread(climate_unique) %>%
-    as.data.frame() %>%
-    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-    mutate(date = foo(DATEB, 1949)) %>%
-    mutate(yday = lubridate::yday(date)) %>%
-    mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-    mutate(TMEAN = as.numeric(TMEAN),
-           TMAX = as.numeric(TMAX),
-           TMIN = as.numeric(TMIN),
-           PRP = as.numeric(PRP)) %>%
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
+  if(option.check.name==T & is.na(siteneame.forsub) == T){
+    stop(paste("siteneame.forsub argument for subseting site is missing :O "))
+  }
+
   
   # Define the year period
   yearneed <- 2
@@ -598,11 +587,18 @@ CSP_function_site <- function(Results_CSPsub,
   data.sub.fagus <- seed.data %>%
     dplyr::filter(sitenewname == siteneame.forsub | plotname.lon.lat == siteneame.forsub)
   
+  #extract climate matching site
+  climate_data <- format_climate_data(
+    site = unique(data.sub.fagus$plotname.lon.lat), 
+    path = climate.path, 
+    scale.climate = TRUE
+  )
+  
   # Run the CSP site analysis function
   runing_csp_site(Results_CSPsub = Results_CSPsub,
                   data = data.sub.fagus,
                   siteneame.forsub = siteneame.forsub,
-                  climate.path = climate.path,
+                  climate_csv = climate_data,
                   refday = refday,
                   lastdays = lastdays,   # Change from max(range) to lastdays
                   rollwin = rollwin)
