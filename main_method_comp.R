@@ -325,6 +325,7 @@ statistics_psr_method = map_dfr(
   site, 
   ~ PSR_function_site(
     site = .x,
+    climate.path = climate.beech.path,
     seed.data = Fagus.seed,  # Use .x correctly here
     tot_days = max(range),
     matrice = c(3,1),
@@ -381,7 +382,7 @@ statistics_basic_method = map_dfr(
     Results_daily[[.]], 
     unique(Results_daily[[.]]$plotname.lon.lat),
     Fagus.seed = Fagus.seed, 
-    climate.beech.path = climate.beech.path,
+    climate.path = climate.beech.path,
     refday = 305,
     lastdays = 600,
     rollwin = 1

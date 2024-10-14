@@ -48,7 +48,7 @@
 #' @export
 runing_psr_site = function(bio_data = bio_data,
                            site = site,
-                           climate.path = here('climate_dailyEOBS/'),
+                           climate_csv = climate_csv,
                            tot_days = 600,
                            refday = 305,
                            rollwin = 1,
@@ -62,20 +62,6 @@ runing_psr_site = function(bio_data = bio_data,
   if((site == unique(bio_data$plotname.lon.lat))==F){
     stop()
   }
-  #path clim
-  climate_unique <- list.files(path = climate.path, full.names = TRUE, pattern =site)
-  climate_csv <- qs::qread(climate_unique) %>%
-    as.data.frame() %>%
-    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-    mutate(date = foo(DATEB, 1949)) %>%
-    mutate(yday = lubridate::yday(date)) %>%
-    mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-    mutate(TMEAN = as.numeric(TMEAN),
-           TMAX = as.numeric(TMAX),
-           TMIN = as.numeric(TMIN),
-           PRP = as.numeric(PRP)) %>%
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
   
   #now psr method, based from Simmonds et al
   # need climate data to be arranged with year as row
@@ -201,7 +187,7 @@ runing_psr_site = function(bio_data = bio_data,
 PSR_function_site <- function(site, 
                               seed.data, 
                               tot_days,
-                              #lastdays, 
+                              climate.path, 
                               matrice = c(3,1),
                               knots = NULL) {
   
@@ -209,10 +195,17 @@ PSR_function_site <- function(site,
   data.sub.fagus <- seed.data %>%
     dplyr::filter(plotname.lon.lat == site)
   
+  #extract climate matching site
+  climate_data <- format_climate_data(
+    site = unique(data.sub.fagus$plotname.lon.lat), 
+    path = climate.path, 
+    scale.climate = TRUE
+  )
+  
   # Run the CSP site analysis function
   runing_psr_site(bio_data = data.sub.fagus,
                   site = site,
-                  climate.path = here('climate_dailyEOBS/'),
+                  climate_csv = climate_data,
                   tot_days = 600,
                   refday = 305,
                   rollwin = 1,

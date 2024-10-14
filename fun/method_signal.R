@@ -162,7 +162,7 @@ runing_basic_cues = function(lag  = 100,
                              lastdays = 600,
                              rollwin = 1,
                              siteforsub = "longitude=-0.15_latitude=50.85",
-                             climate.beech.path = climate.beech.path,
+                             climate_csv = climate_csv,
                              Results_CSPsub = Results_CSPsub,
                              data = data){
   
@@ -198,23 +198,6 @@ runing_basic_cues = function(lag  = 100,
   #i guess now will do the same shit as the other methods 
   window_ranges_df <- save_window_ranges(sequences_days) %>% 
     mutate(windows.sequences.number = 1:nrow(.))
-  
-  climate_beech_unique <- list.files(path = climate.beech.path, full.names = TRUE, pattern = siteforsub)
-  if((siteforsub == unique(Results_CSPsub$plotname.lon.lat))==F){
-    stop()
-  }
-  climate_csv <- qs::qread(climate_beech_unique) %>%
-    as.data.frame() %>%
-    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-    mutate(date = foo(DATEB, 1949)) %>%
-    mutate(yday = lubridate::yday(date)) %>%
-    mutate(year = as.numeric(str_sub(as.character(date),1, 4)) ) %>%
-    mutate(TMEAN = as.numeric(TMEAN),
-           TMAX = as.numeric(TMAX),
-           TMIN = as.numeric(TMIN),
-           PRP = as.numeric(PRP)) %>%
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale))%>% 
-    mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
   
   yearneed <- 2
   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
@@ -273,12 +256,19 @@ runing_basic_cues = function(lag  = 100,
 basiccues_function_site <- function(Results_CSPsub, 
                                     siteforsub, 
                                     Fagus.seed, 
-                                    climate.beech.path, 
+                                    climate.path, 
                                     refday, lastdays, rollwin) {
   
   # Filter the Fagus seed data by the site name
   data.sub.fagus <- Fagus.seed %>%
     dplyr::filter(plotname.lon.lat == siteforsub)
+  
+  #extract climate matching site
+  climate_data <- format_climate_data(
+    site = unique(data.sub.fagus$plotname.lon.lat), 
+    path = climate.path, 
+    scale.climate = TRUE
+  )
   
   # Run the CSP site analysis function
   runing_basic_cues(data = data.sub.fagus,
@@ -290,7 +280,7 @@ basiccues_function_site <- function(Results_CSPsub,
                     refday = 305,
                     lastdays = 600,
                     rollwin = 1,
-                    climate.beech.path = climate.beech.path,
+                    climate_csv = climate_data,
                     Results_CSPsub = Results_CSPsub)
 }
 
