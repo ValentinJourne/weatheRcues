@@ -947,32 +947,94 @@ june_week <- climate_data %>%
   filter(day_of_year >= 150 & day_of_year <= 160)
 
 #then make it strongly correlated to the climate window
-seed_production <- june_week %>%
-  group_by(year) %>%
-  summarise(mean_temp_june_week = mean(temp)) %>%
-  mutate(seed_production = log(round(mean_temp_june_week * 5 + 50))) %>%  # A deterministic scaling formula for count data
-  filter(year > startyear)%>%
-  mutate(year = as.numeric(as.character(year))) %>% 
-  mutate(Date = paste0( "15/06/",year)) %>% #need a date, even if absolute window
-  mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y")) #make it as in the climate date
+test.simulation <- function(simulation.bio.data = june_week,
+                           seed_production,
+                           sample.fraction = 1,
+                           correlation = 0.2){
+  seed_production <- simulation.bio.data %>%
+    group_by(year) %>%
+    summarise(mean_temp_june_week = mean(temp)) %>%
+    mutate(random_noise = rnorm(n(), mean = 0, sd = sd(mean_temp_june_week) * sqrt((1 - correlation^2) / correlation^2))) %>%
+    mutate(log.seed = log(round(100 + mean_temp_june_week * 5 + random_noise))) %>%
+    filter(year > startyear)%>% #to select one year less 
+    mutate(year = as.numeric(as.character(year))) %>% 
+    mutate(Date = paste0( "15/06/",year)) %>% #need a date, even if absolute window
+    mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y")) %>% #make it as in the climate date
+    sample_frac(sample.fraction)  
+  
+  print(cor(seed_production$mean_temp_june_week, seed_production$log.seed))
+  
+  
+  simulation1 = climwin_site_days(climate_data,
+                                  data = seed_production,
+                                  site.name = 'simulation', #character will be added in the final form file
+                                  range = c(600, 0),
+                                  cinterval = 'day',
+                                  refday = c(01, 11),
+                                  optionwindows = 'absolute',
+                                  climate_var = 'temp',
+                                  formulanull = formula(log.seed ~ 1)) 
+  return(simulation1 %>% mutate(sample.fraction.used = sample.fraction))
+}
+
+seq.sim = seq(0.3,0.9,0.1)
+test.simulation.results = NULL
+for(i in 1:length(seq.sim)){
+  simulation1 = test.simulation(simulation.bio.data = june_week,
+                     seed_production,
+                     sample.fraction = seq.sim[i])
+  test.simulation.results = rbind(test.simulation.results, simulation1)
+}
+
+test.simulation.results %>% 
+  dplyr::select(sample.fraction.used, WindowOpen, WindowClose) %>% 
+  pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
+  left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed))
 
 
-# Check correlation between seed production and June week temperature
-correlation_value <- cor(seed_production$seed_production, seed_production$mean_temp_june_week);correlation_value
 
-# Visualize seed production vs. June week temperature
-ggplot(seed_production, aes(x = mean_temp_june_week, y = seed_production)) +
-  geom_point(color = "blue", size = 3) +
-  geom_smooth(method = "lm", se = FALSE, color = "red") +
-  ggtitle("Seed Production (Perfect Correlation) vs June Week Temperature") +
-  xlab("Mean Temperature (June Week)") +
-  ylab("Seed Production (Count Data)") +
-  theme_minimal()
 
-# Histogram of the seed production counts to visualize the distribution
-ggplot(seed_production, aes(x = exp(seed_production))) +
-  geom_histogram(binwidth = 10, fill = "blue", color = "black", alpha = 0.7) +
-  ggtitle("Distribution of Seed Production (Count Data with Perfect Correlation)")
+
+
+
+#climwin need to adjust for 0 - 1, row start at 0 and not 1 
+calendar = goingbackpastdayscalendar(refday = 304,
+                                     lastdays = 600, 
+                                     yearback = 2) %>% 
+  filter(YEAR == 1950) %>% 
+  dplyr::select(MONTHab, DOY, days.reversed) %>% 
+  mutate(datefake  = as.Date(DOY, origin = "1948-01-01"),
+         day.month = format(datefake,"%m-%d"), 
+         year = case_when(
+           days.reversed < 366 ~ 1,
+           days.reversed >= 366 & days.reversed < 730 ~ 2,
+           days.reversed >= 730 & days.reversed < 1095 ~ 3,
+           TRUE ~ 4))
+
+climwin_output_simulation$combos %>% 
+  dplyr::select(WindowOpen, WindowClose) %>% 
+  pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
+  left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed)) 
+
+
+plot.mysim(seed_production)
+plot.mysim = function(seed_production){
+  # Visualize seed production vs. June week temperature
+  ggplot(seed_production, aes(x = mean_temp_june_week, y = log.seed)) +
+    geom_point(color = "blue", size = 3) +
+    geom_smooth(method = "lm", se = FALSE, color = "red") +
+    ggtitle("Seed Production (Perfect Correlation) vs June Week Temperature") +
+    xlab("Mean Temperature (June Week)") +
+    ylab("Seed Production (Count Data)") +
+    theme_minimal()
+  
+  # Histogram of the seed production counts to visualize the distribution
+  #ggplot(seed_production, aes(x = exp(log.seed))) +
+  #  geom_histogram(binwidth = 10, fill = "blue", color = "black", alpha = 0.7) 
+
+  print(cor(seed_production$mean_temp_june_week, seed_production$log.seed))
+}
+
 
 climwin_output_simulation <- climwin::slidingwin(
   xvar = list(temperature.degree = climate_data$temp),
@@ -989,27 +1051,6 @@ climwin_output_simulation <- climwin::slidingwin(
 )
 climwin_output_simulation
 
-MassOutput <- climwin_output_simulation[[1]]$Dataset
-library(climwin)
 plotall(dataset = climwin_output_simulation[[1]]$Dataset,
         bestmodel = climwin_output_simulation[[1]]$BestModel, 
         bestmodeldata = climwin_output_simulation[[1]]$BestModelData)
-
-climwin_output_simulation$combos %>% 
-  dplyr::select(WindowOpen, WindowClose) %>% 
-  pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
-  left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed)) 
-
-#climwin need to adjust for 0 - 1, row start at 0 and not 1 
-calendar = goingbackpastdayscalendar(refday = 304,
-                                     lastdays = 400, 
-                                     yearback = 2) %>% 
-  filter(YEAR == 1950) %>% 
-  dplyr::select(MONTHab, DOY, days.reversed) %>% 
-  mutate(datefake  = as.Date(DOY, origin = "1948-01-01"),
-         day.month = format(datefake,"%m-%d"), 
-         year = case_when(
-           days.reversed < 366 ~ 1,
-           days.reversed >= 366 & days.reversed < 730 ~ 2,
-           days.reversed >= 730 & days.reversed < 1095 ~ 3,
-           TRUE ~ 4))
