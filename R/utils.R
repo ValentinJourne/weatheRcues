@@ -224,11 +224,11 @@ goingbackpastdayscalendar <-function(refday = 274,
     seqDays <- seq(1,nrow(tt),1)
     newsequance <- rep(seqDays)
     ttup <- tt %>% 
-      mutate(days.reversed = rev(newsequance))%>% 
-      filter(days.reversed< lastdays )
+      dplyr::mutate(days.reversed = rev(newsequance))%>% 
+      dplyr::filter(days.reversed< lastdays )
     ttupfin = ttup %>%
-      arrange(days.reversed)  %>% 
-      mutate(YEAR = max(YEAR))  
+      dplyr::arrange(days.reversed)  %>% 
+      dplyr::mutate(YEAR = max(YEAR))  
     vectotemp <- rbind(vectotemp, ttupfin) 
   }
   return(vectotemp)
@@ -473,8 +473,8 @@ reruning_windows_modelling = function(z, tible.sitelevel = tible.sitelevel, wind
     lm(myform.fin, data = .)
   
   # Extract model coefficients and statistics
-  tidy_model <- tidy(fit.best.model)
-  glance_model <- glance(fit.best.model)
+  tidy_model <- broom::tidy(fit.best.model)
+  glance_model <- broom::glance(fit.best.model)
   
   # Create a data frame for the results
   data.frame(
@@ -681,16 +681,16 @@ runing.movingwin.analysis = function(data = data,
   
   slope = fitted_models %>%
     unnest(tidied) %>% 
-    filter(str_detect(term, as.character(myform)[3])) %>% 
+    dplyr::filter(str_detect(term, as.character(myform)[3])) %>% 
     dplyr::select(days.reversed,term, estimate, std.error, p.value) %>% 
-    mutate(sitenewname  = unique(tible.sitelevel$sitenewname)) %>% 
-    left_join(fitted_models %>%
+    dplyr::mutate(sitenewname  = unique(tible.sitelevel$sitenewname)) %>% 
+    dplyr::left_join(fitted_models %>%
                 unnest(glanced) %>% 
                 dplyr::select(days.reversed,r.squared, logLik) %>% 
                 mutate(sitenewname  = unique(tible.sitelevel$sitenewname),
                        plotname.lon.lat = unique(tible.sitelevel$plotname.lon.lat))) %>% 
     dplyr::select(sitenewname, plotname.lon.lat, days.reversed, everything()) %>% 
-    left_join(cortemp)
+    dplyr::left_join(cortemp)
   
   return(slope)
 }
@@ -835,36 +835,125 @@ FULL.moving.climate.analysis <- function(seed.data.all = seed.data.all,
   return(results.moving)
 }
 
-#calcuate standard error 
-se <- function(x){
-  x2 <- na.omit(x)
-  n <- length(x2)
-  sd(x2)/sqrt(n)
-}
-
+#' Calculate Standard Error
+#'
+#' This function calculates the standard error of a numeric vector, excluding missing values (`NA`).
+#'
+#' @param x Numeric vector. The data for which the standard error is to be calculated.
+#'
+#' @details The function first removes missing values using `na.omit()`. It then calculates the sample size (`n`), and returns the standard deviation of the non-missing values divided by the square root of the sample size (i.e., the standard error).
+#'
+#' @return A numeric value representing the standard error of the input vector.
+#'
+#' @importFrom stats sd
+#' @export
+#'
+#' @examples
+#' # Example with a numeric vector
+#' values <- c(1.5, 2.3, 3.1, NA, 4.0)
+#' standard_error <- se(values)
+#' print(standard_error)
+#'
+  se <- function(x){
+    x2 <- na.omit(x)
+    n <- length(x2)
+    sd(x2)/sqrt(n)
+  }
+  
+#' Format Climate Data
+#'
+#' This function reads climate data from a specified file path for a given site, 
+#' applies necessary transformations and scaling, and returns the formatted data.
+#'
+#' @param site Character. The site identifier used to match climate data files (e.g., "site_name").
+#' @param path Character. The directory path where the climate data files are stored.
+#' @param scale.climate Logical. Should the climate variables (`TMEAN`, `TMAX`, `TMIN`, `PRP`) be standardized? Defaults to `TRUE`.
+#'
+#' @details The function performs the following steps:
+#' - Reads the climate data file for the specified site using `qs::qread()`.
+#' - Converts the `DATEB` field to a proper date format.
+#' - Applies a transformation using the `foo()` function (assumed to adjust the year based on an origin date of 1949).
+#' - Extracts the year and day of the year (`yday`) from the date.
+#' - Converts temperature (`TMEAN`, `TMAX`, `TMIN`) and precipitation (`PRP`) to numeric format.
+#' 
+#' If `scale.climate` is `TRUE`, the climate variables are standardized using `scale()`. The standardized values are then converted to vectors using `as.vector()`.
+#'
+#' @return A `data.frame` containing the formatted climate data with columns:
+#' - `DATEB`: Original date (before transformation).
+#' - `date`: Transformed date.
+#' - `yday`: Day of the year.
+#' - `year`: Year extracted from the date.
+#' - `TMEAN`, `TMAX`, `TMIN`, `PRP`: Numeric values for mean temperature, maximum temperature, minimum temperature, and precipitation, respectively.
+#' 
+#' If `scale.climate` is `TRUE`, these variables are standardized.
+#'
+#' @importFrom dplyr mutate across
+#' @importFrom qs qread
+#' @importFrom lubridate yday year
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Format climate data for site "example_site" located at "/data/climate"
+#' formatted_data <- format_climate_data(site = "example_site", path = "/data/climate", scale.climate = TRUE)
+#' }
 format_climate_data <- function(site,
                                 path,
                                 scale.climate = TRUE) {
   climate_data <- qs::qread(list.files(path = path, full.names = TRUE, pattern = site)) %>%
     as.data.frame() %>%
-    mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-    mutate(date = foo(DATEB, 1949)) %>%  
-    mutate(yday = yday(date),
+    dplyr::mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
+    dplyr::mutate(date = foo(DATEB, 1949)) %>%  
+    dplyr::mutate(yday = yday(date),
            year = year(date)) %>%
-    mutate(TMEAN = as.numeric(TMEAN),
+    dplyr::mutate(TMEAN = as.numeric(TMEAN),
            TMAX = as.numeric(TMAX),
            TMIN = as.numeric(TMIN),
            PRP = as.numeric(PRP))
   
   if (scale.climate) {
     climate_data <- climate_data %>%
-      mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale)) %>%
-      mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
+      dplyr::mutate(across(c(TMEAN, TMAX, TMIN, PRP), scale)) %>%
+      dplyr::mutate(across(c(TMEAN, TMAX, TMIN, PRP), as.vector))
   }
  
   return(climate_data)
 }
 
+#' Calculate Parameter Ranges
+#'
+#' This function processes the input data for parameters alpha, beta, and sigma, and returns either the mean and standard deviation or the minimum and maximum values, based on the specified option.
+#'
+#' @param raw.data.param.alpha Numeric vector or data for the parameter alpha.
+#' @param raw.data.param.beta Numeric vector or data for the parameter beta.
+#' @param raw.data.param.sigma Numeric vector or data for the parameter sigma.
+#' @param option Character. Either `"mean.sd"` to return the mean and standard deviation, or `"min.max"` to return the minimum and maximum values. Default is `"mean.sd"`.
+#'
+#' @details This function takes in raw data for parameters alpha, beta, and sigma. Depending on the `option` argument, it calculates either:
+#' - the minimum and maximum values (`min.max`), or
+#' - the mean and standard deviation (`mean.sd`).
+#' The function uses helper functions `get.min.max()` and `get.mean.sd()` to perform these calculations.
+#' If an invalid option is provided, the function will stop and return an error message.
+#'
+#' @return A list containing the processed values for:
+#' - `alpha`: Processed values for the alpha parameter.
+#' - `beta`: Processed values for the beta parameter.
+#' - `sigma`: Processed values for the sigma parameter.
+#'
+#' @export
+#'
+#' @examples
+#' # Example with mean and standard deviation option
+#' alpha <- rnorm(100)
+#' beta <- rnorm(100)
+#' sigma <- rnorm(100)
+#' param_ranges <- parameter.range(alpha, beta, sigma, option = "mean.sd")
+#' print(param_ranges)
+#'
+#' # Example with min and max option
+#' param_ranges_min_max <- parameter.range(alpha, beta, sigma, option = "min.max")
+#' print(param_ranges_min_max)
+#'
 parameter.range = function(raw.data.param.alpha,
                            raw.data.param.beta,
                            raw.data.param.sigma,
@@ -885,12 +974,56 @@ parameter.range = function(raw.data.param.alpha,
   list(alpha = raw.data.param.alpha, beta = raw.data.param.beta, sigma = raw.data.param.sigma)
   
 }
-
+#' Get Minimum and Maximum of a Vector
+#'
+#' This function computes the minimum and maximum values of a numeric vector.
+#'
+#' @param vector Numeric vector. The input data from which the minimum and maximum values will be computed.
+#'
+#' @return A numeric vector of length two containing:
+#' - The minimum value (first element).
+#' - The maximum value (second element).
+#'
+#' @details This function returns the smallest and largest values from the input numeric vector.
+#' If the vector contains missing values (`NA`), they will be ignored in the calculation.
+#'
+#' @export
+#'
+#' @examples
+#' vec <- c(1, 2, 3, 4, 5)
+#' get.min.max(vec) # returns c(1, 5)
+#'
+#' vec_with_na <- c(NA, 2, 3, 4, 5)
+#' get.min.max(vec_with_na) # returns c(2, 5)
+#'
 get.min.max = function(vector){
   o.min = min(vector)
   o.max = max(vector)
   c(o.min,o.max)
 }
+
+#' Get Mean and Standard Deviation of a Vector
+#'
+#' This function computes the mean and standard deviation of a numeric vector.
+#'
+#' @param vector Numeric vector. The input data from which the mean and standard deviation will be computed.
+#'
+#' @return A numeric vector of length two containing:
+#' - The mean value (first element).
+#' - The standard deviation (second element).
+#'
+#' @details This function returns the average (mean) and standard deviation of the input numeric vector.
+#' If the vector contains missing values (`NA`), they will be ignored in the calculation.
+#'
+#' @export
+#'
+#' @examples
+#' vec <- c(1, 2, 3, 4, 5)
+#' get.mean.sd(vec) # returns c(3, 1.581139)
+#'
+#' vec_with_na <- c(NA, 2, 3, 4, 5)
+#' get.mean.sd(vec_with_na) # returns c(3.5, 1.290994)
+#'
 get.mean.sd = function(vector){
   o.mean = mean(vector)
   o.sd = sd(vector)

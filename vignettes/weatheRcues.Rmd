@@ -17,3 +17,60 @@ knitr::opts_chunk$set(collapse = TRUE,
 library(weatheRcues)
 ```
 
+
+```{r generate data, include=FALSE}
+
+set.seed(123)  
+startyear = 1940
+years <- startyear:2020
+days_per_year <- 365
+climate_data_simulated <- data.frame(
+  date = seq.Date(from = as.Date(paste0(startyear,"-01-01")), by = "day", length.out = length(years) * days_per_year),
+  temp = runif(length(years) * days_per_year, min = 10, max = 30)  # random temperatures
+)
+
+climate_data_simulated <- climate_data_simulated %>%
+  mutate(year = format(date, "%Y"),
+         day_of_year = yday(date),
+         year = as.numeric(year)) %>%
+  mutate(across(c(temp), scale)) %>%
+  mutate(across(c(temp), as.vector))
+
+# Select ~ one week in June 
+june_week <- climate_data_simulated %>%
+  filter(day_of_year >= 150 & day_of_year <= 160)
+
+seed_production_simulated <- june_week %>%
+  group_by(year) %>%
+  summarise(mean_temp_june_week = mean(temp)) %>%
+  # Standardize the mean temperature for proper correlation, as in the main analysis
+  mutate(mean_temp_scaled = scale(mean_temp_june_week, center = TRUE, scale = TRUE)) %>%
+  # Generate log.seed with controlled correlation
+  mutate(log.seed = 1 + 5 * mean_temp_scaled + rnorm(n(), mean = 0, sd = 1))%>%
+  filter(year > startyear)%>% #to select one year less 
+  mutate(year = as.numeric(as.character(year))) %>% 
+  mutate(Date = paste0( "15/06/",year)) %>% #need a date, even if absolute window
+  mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y"))  %>%
+  dplyr::mutate(across(c(mean_temp_scaled, log.seed), as.vector)) #remove the vector type 
+  
+
+```
+
+```{r sliding window}
+head(seed_production_simulated)
+head(climate_data_simulated)
+
+climwin.output = climwin_site_days(
+        climate_data = climate_data_simulated,
+        data = seed_production_simulated,  
+        site.name = 'test',  
+        range = c(300, 0), #double check if climate is long enough (to match bio data)
+        cinterval = 'day',
+        refday = c(01, 11),  
+        optionwindows = 'absolute',  
+        climate_var = 'temp'  
+      )
+
+climwin.output
+
+```

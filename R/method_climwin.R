@@ -57,20 +57,22 @@ climwin_site_days <- function(climate_data,
                               refday = c(01, 11),
                               optionwindows = 'absolute',
                               climate_var = 'TMEAN',
+                              stat.aggregate = 'mean',
                               formulanull = formula(log.seed ~ 1)) {
   
   print(paste("range:", range))
   print(paste("cinterval:", cinterval))
   print(paste("refday:", refday))
+  print(paste("stat aggregate:", stat.aggregate))
+  print(paste("windows option:", optionwindows))
   print(paste("variable of interest:", climate_var))
   
   
   # Filter climate data for the site
   #if(length(climate_beech_unique) == 0) stop("You missed the file matching site name.")
-  if(nrow(climate_data)==0)stop("Your climate file seems to be not in the good shape. Please grab a cup of tea or coffee")
-  if(nrow(data)==0)stop("Your bio data file seems to be not in the good shape. Please grab a cup of tea or coffee")
-  #if(is.na(climate_var)==T)stop("Please specify your climate variable use")
-  
+  if(nrow(climate_data)==0)stop("Your climate file seems to be not in the good shape. Please double check")
+  if(nrow(data)==0)stop("Your bio data file seems to be not in the good shape. Please double check")
+
   # Load the biological data for the site
   data <- data  %>% 
     filter(!is.na(eval(parse(text = strsplit(as.character(formulanull)[3], " ~ ")[[1]][1]))))
@@ -85,25 +87,25 @@ climwin_site_days <- function(climate_data,
     range = range,
     type = optionwindows,
     refday = refday,
-    stat = "mean",
+    stat = stat.aggregate,
     cmissing = 'method2',
     func = "lin"
   )
   
   # Extract the summary for the best model
   broom_summary_slope <- broom::tidy(climwin_output[[1]]$BestModel) %>%
-    filter(term == 'climate') %>%
+    dplyr::filter(term == 'climate') %>%
     dplyr::select(-term)%>% 
     rename_with(.cols = everything(), function(x){paste0("slope.", x)})
   broom_summary_intercept <- broom::tidy(climwin_output[[1]]$BestModel) %>%
-    filter(term != 'climate') %>%
+    dplyr::filter(term != 'climate') %>%
     dplyr::select(-term) %>% 
     rename_with(.cols = everything(), function(x){paste0("intercept.", x)})
   sigma.model = sigma(climwin_output[[1]]$BestModel)
   
   
   # Extract performance statistics and combine with site information
-  statistics <- bind_cols(
+  statistics <- dplyr::bind_cols(
     sitenewname = unique(data$sitenewname),
     climate.file = site.name,
     climwin_output$combos, # Extract statistics for all variants

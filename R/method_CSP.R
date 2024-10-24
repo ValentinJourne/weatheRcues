@@ -1,11 +1,8 @@
 #' Perform Climate Window Analysis - based on Climate sensitivity profil from Thackeray et al
 #' note that some function have been obtained or adjusted from Thackeray et al paper OR also from Simmonds et al
-#' 
-#' 
-#' 
 #' Find Concurrent Periods with Extreme Averages
 #'
-#' This function identifies periods within a given temperature window where the average of predicted coefficients is most extreme. The periods are determined based on gaps in sequential dates and are selected based on the maximum average of the absolute values of the predicted coefficients.
+#' @description This function identifies periods within a given temperature window where the average of predicted coefficients is most extreme. The periods are determined based on gaps in sequential dates and are selected based on the maximum average of the absolute values of the predicted coefficients.
 #'
 #' @param temp_window A numeric vector representing the temperature window or sequence of dates. This vector should be ordered.
 #' @param pred_C A data frame or matrix containing the predicted coefficients. It must include a column named `fit` that contains the predicted values corresponding to the dates in `temp_window`.
@@ -23,6 +20,7 @@
 #' # Find the concurrent period with the most extreme average
 #' find_concurrent_period(temp_window, pred_C)
 #'
+#' @export
 find_concurrent_period=function(temp_window,pred_C){
   
   #create dummy index
@@ -154,7 +152,7 @@ optimize_and_fit_gam <- function(temporary, optim.k = TRUE, plots = F, k = 20) {
     
     for (k in 1:length(k_values)) {
       # Fit the model
-      slope_gam <- gam(slope ~ s(day, k = k_values[k], bs = "cr"), data = temporary)
+      slope_gam <- mgcv::gam(slope ~ s(day, k = k_values[k], bs = "cr"), data = temporary)
       
       # Perform k.check
       check <- k.check(slope_gam)
@@ -169,25 +167,25 @@ optimize_and_fit_gam <- function(temporary, optim.k = TRUE, plots = F, k = 20) {
     }
     if (!is.null(optimal_k)) {
       cat("Optimal k found:", optimal_k, "\n")
-      slope_gam <- gam(slope ~ s(day, k = optimal_k, bs = "cr"), data = temporary)
-      rs_gam <- gam(r_s ~ s(day, k = optimal_k, bs = "cr"), data = temporary)
+      slope_gam <- mgcv::gam(slope ~ s(day, k = optimal_k, bs = "cr"), data = temporary)
+      rs_gam <- mgcv::gam(r_s ~ s(day, k = optimal_k, bs = "cr"), data = temporary)
       k <- optimal_k
     } else {
       cat("No optimal k found within the specified range. Using default k = -1.\n")
-      slope_gam <- gam(slope ~ s(day, k = -1, bs = "cr"), data = temporary)
-      rs_gam <- gam(r_s ~ s(day, k = -1, bs = "cr"), data = temporary)
+      slope_gam <- mgcv::gam(slope ~ s(day, k = -1, bs = "cr"), data = temporary)
+      rs_gam <- mgcv::gam(r_s ~ s(day, k = -1, bs = "cr"), data = temporary)
       k <- -1
     }
   } else {
-    slope_gam <- gam(slope ~ s(day, k = k, bs = "cr"), data = temporary)
-    rs_gam <- gam(r_s ~ s(day, k = k, bs = "cr"), data = temporary)
+    slope_gam <- mgcv::gam(slope ~ s(day, k = k, bs = "cr"), data = temporary)
+    rs_gam <- mgcv::gam(r_s ~ s(day, k = k, bs = "cr"), data = temporary)
     k <- k
   }
   
   if (plots) {
     results <- cowplot::plot_grid(
-      draw(slope_gam, residuals = TRUE) + ylab('Slope (partial effect)'), 
-      draw(rs_gam, residuals = TRUE) + ylab('R2 (partial effect)')
+      gratia::draw(slope_gam, residuals = TRUE) + ylab('Slope (partial effect)'), 
+      gratia::draw(rs_gam, residuals = TRUE) + ylab('R2 (partial effect)')
     )
     print(results)
   }

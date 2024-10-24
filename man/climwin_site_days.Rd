@@ -13,6 +13,7 @@ climwin_site_days(
   refday = c(1, 11),
   optionwindows = "absolute",
   climate_var = "TMEAN",
+  stat.aggregate = "mean",
   formulanull = formula(log.seed ~ 1)
 )
 }
