@@ -255,23 +255,23 @@ runing_basic_cues = function(lag  = 100,
 #' @export
 basiccues_function_site <- function(Results_CSPsub, 
                                     siteforsub, 
-                                    Fagus.seed, 
+                                    seed.data, 
                                     climate.path, 
                                     refday, lastdays, rollwin) {
   
   # Filter the Fagus seed data by the site name
-  data.sub.fagus <- Fagus.seed %>%
+  data.sub <- seed.data %>%
     dplyr::filter(plotname.lon.lat == siteforsub)
   
   #extract climate matching site
   climate_data <- format_climate_data(
-    site = unique(data.sub.fagus$plotname.lon.lat), 
+    site = unique(data.sub$plotname.lon.lat), 
     path = climate.path, 
     scale.climate = TRUE
   )
   
   # Run the CSP site analysis function
-  runing_basic_cues(data = data.sub.fagus,
+  runing_basic_cues(data = data.sub,
                     siteforsub = siteforsub,
                     lag  = 100,
                     threshold = 3,

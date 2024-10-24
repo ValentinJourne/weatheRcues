@@ -91,9 +91,16 @@ climwin_site_days <- function(climate_data,
   )
   
   # Extract the summary for the best model
-  broom_summary <- broom::tidy(climwin_output[[1]]$BestModel) %>%
+  broom_summary_slope <- broom::tidy(climwin_output[[1]]$BestModel) %>%
     filter(term == 'climate') %>%
-    dplyr::select(-term)
+    dplyr::select(-term)%>% 
+    rename_with(.cols = everything(), function(x){paste0("slope.", x)})
+  broom_summary_intercept <- broom::tidy(climwin_output[[1]]$BestModel) %>%
+    filter(term != 'climate') %>%
+    dplyr::select(-term) %>% 
+    rename_with(.cols = everything(), function(x){paste0("intercept.", x)})
+  sigma.model = sigma(climwin_output[[1]]$BestModel)
+  
   
   # Extract performance statistics and combine with site information
   statistics <- bind_cols(
@@ -101,8 +108,12 @@ climwin_site_days <- function(climate_data,
     climate.file = site.name,
     climwin_output$combos, # Extract statistics for all variants
     performance::model_performance(climwin_output[[1]]$BestModel) %>% as.data.frame(),
-    broom_summary
-  )
+    broom_summary_slope,
+    broom_summary_intercept,
+    sigma = sigma.model
+  ) %>% 
+    dplyr::rename(window.open = WindowOpen,
+                  window.close = WindowClose)
   
   return(statistics)
 }
