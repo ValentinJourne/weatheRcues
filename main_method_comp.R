@@ -1,3 +1,13 @@
+library(rcompendium)
+add_description(given = 'Valentin', family = 'Journé',
+                email = 'journe.valentin@gmail.com')
+add_license('CC BY 4.0')
+add_readme_rmd(given = 'Valentin', family = 'Journé')
+add_depdendcies('.')
+devtools::load_all(here::here())
+remotes::install_deps()
+#https://frbcesab.github.io/rcompendium/articles/rcompendium.html
+
 #https://community.rstudio.com/t/unable-to-install-packages-from-github/124372
 #Sys.unsetenv("GITHUB_PAT")
 library(tidyverse)
@@ -16,6 +26,7 @@ library(ggsci)
 
 functions <- list.files(here("fun"), full.names = T) %>%
   purrr::map(source)
+
 
 
 
@@ -63,13 +74,13 @@ Fagus.seed = initial.data.mastree %>%
   mutate(nMax = n()) %>% 
   filter(Species == "Fagus sylvatica") %>% 
   #filter(Unit == "seeds/m2" | Unit == "seeds/individual") %>% 
-  filter(Year > 1952 & Year < 2021) %>% 
+  filter(Year > 1952 & Year < 2023) %>% 
   mutate(sitenewname= paste0(Alpha_Number, "_",Site_number, "_", Species_code)) %>% 
   group_by(sitenewname) %>% 
   mutate(log.seed = log(1+Value),
          scale.seed = scale(Value),
          n = n()) %>% 
-  filter(n > 20) %>% #initially 14
+  filter(n > 19) %>% #initially 14
   mutate() %>% 
   mutate(Date = paste0( "15/06/",Year)) %>% 
   mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y"),
@@ -86,10 +97,22 @@ methods.collection.mv2 = Fagus.seed %>% dplyr::select(sitenewname, Country, Coll
 seed.production.plot = Fagus.seed %>% 
   group_by(plotname.lon.lat) %>% 
   complete(Year = full_seq(Year, 1)) %>% 
-  ggplot(aes(x=Year, y = log.seed, group = plotname.lon.lat))+
+  drop_na(Collection_method) %>% 
+  ggplot(aes(x=Year, y = log.seed, group = plotname.lon.lat, col = Collection_method))+
   geom_line(na.rm = FALSE, alpha = .1)+
   ggpubr::theme_pubr()+
-  ylab('Seed production (log)')
+  ylab('Seed production (log)')+
+  facet_grid(Collection_method~., scales = 'free')+
+  scale_color_futurama()+
+  scale_fill_futurama()+
+  theme(legend.position = 'none')
+
+
+#for methods 
+forsummary = Fagus.seed %>% dplyr::select(n, sitenewname, Collection_method) %>% distinct()
+summary(forsummary$n)
+table(forsummary$Collection_method)
+
 
 
 plot_locations<- st_as_sf(Fagus.seed %>% 
@@ -102,7 +125,7 @@ mapBase <- getMap(resolution = "high") %>%
   st_make_valid()%>%  st_crop(mapBase, xmin = -12, xmax = 35, ymin = 35, ymax = 70)
 
 MapsMastree <- ggplot(data=mapBase$geometry)+ 
-  geom_sf(fill = "grey", colour = "grey")+ #plot map of France
+  geom_sf(fill = "grey90", colour = "black", alpha = .8, linewidth = .25)+ #plot map of France
   xlab(" ")+ ylab(" ")+ #white or aliceblue
   #geom_sf(data = faguseuforgen, col = "#FFDB6D", fill = "#FFDB6D", alpha = 0.55, linewidth = .35)+
   geom_point(data = plot_locations %>%  mutate(x = unlist(map(geometry,1)),
@@ -120,16 +143,19 @@ MapsMastree <- ggplot(data=mapBase$geometry)+
   ylab("Latitude")+xlab("Longitude")+
   ggpubr::theme_pubr()+
   #theme(legend.position = c(.1,.8))+
-  #scale_color_aaas()+
-  #scale_fill_aaas()+
-  scale_color_brewer(palette = "Dark2")+
-  scale_fill_brewer(palette = "Dark2")+
+  #scale_color_locuszoom()+
+  #scale_fill_locuszoom()+
+  scale_color_futurama()+
+  scale_fill_futurama()+
+  #scale_color_brewer(palette = "Set1")+
+  #scale_fill_brewer(palette = "Set1")+
   guides(col = "none", fill=guide_legend(title=NULL, override.aes = list(size=8)))
 
 library(patchwork)
 
-cowplot::save_plot(here("figures/data.des.png"),MapsMastree+seed.production.plot, 
-                   ncol = 2, nrow = 1.5, dpi = 300)
+cowplot::save_plot(here("figures/data.des.png"),MapsMastree+seed.production.plot+plot_annotation(tag_levels = 'a') & 
+                     theme(plot.tag = element_text(size = 12)), 
+                   ncol = 2, nrow = 2, dpi = 300)
 
 #some option 
 #here for climwin 
@@ -152,8 +178,8 @@ beech.site.all = unique(Fagus.seed$plotname.lon.lat)
 # Define a function to process each site
 #I want the function to work only for one site
 #option to run in parallel to make it faster (faster than map_dfr, but need double checking because if not well defined = issues)
-run.climwin <- F
-#take some time ! 
+run.climwin <-F
+#take some time ! more than 1 h 
 if(run.climwin==T){
   library(furrr)#make it in parallele, https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html
   plan(multisession)#background R sessions (on current machine) , the computer is flying (alt cluster)
@@ -205,13 +231,18 @@ climwin.all.sites = climwin.dd %>% dplyr::select(sitenewname, name, days.reverse
 ggplot()+
   geom_segment(aes(y = WindowOpen, yend = WindowClose, x = sitenewname, col = Collection_method), size = 2) +
   coord_flip()+
-  geom_hline(yintercept = 133, color = 'red')+
-  geom_hline(yintercept = 498, color = 'red')+
+  geom_hline(yintercept = 133, color = 'black', linetype = 'dashed')+
+  geom_hline(yintercept = 498, color = 'black', linetype = 'dashed')+
   ylim(0,600)+
   scale_color_brewer(palette = "Dark2")+
-  scale_fill_brewer(palette = "Dark2")
+  scale_fill_brewer(palette = "Dark2")+
+  scale_color_futurama()+
+  scale_fill_futurama()+
+  ggpubr::theme_cleveland()+
+  theme(legend.position = 'bottom', legend.title = element_blank())+
+  ylab('Days reversed')
 
-cowplot::save_plot(here("figures/climwin_allsites_methods.png"),climwin.all.sites, ncol = 1.5, nrow = 1.5, dpi = 300)
+cowplot::save_plot(here("figures/climwin_allsites_methods.png"),climwin.all.sites, ncol = 1.5, nrow = 1.8, dpi = 300)
 
   
 quibble2(statistics_absolute_climwin$WindowOpen, q = c(0.25, 0.5, 0.75))
@@ -226,15 +257,7 @@ results.moving.site = FULL.moving.climate.analysis(seed.data = Fagus.seed,
                              lastdays = max(range),
                              rollwin = 1)
 
-
-ggplot(results.moving.site)+
-  geom_bar(aes(y = r.squared, x = days.reversed), size = 2, stat="identity" ) +
-  geom_vline(xintercept = 133, color = 'red')+
-  geom_vline(xintercept = 498, color = 'red')
-
-
-
-#create 61 list - 1 per site 
+#create 50 list - 1 per site 
 Results_daily = results.moving.site %>%
   arrange(plotname.lon.lat) %>% 
   group_by(plotname.lon.lat) %>%
@@ -262,7 +285,7 @@ statistics_csp_method = map_dfr(
     seed.data = Fagus.seed %>% arrange(plotname.lon.lat), 
     climate.path = climate.beech.path,
     refday = 305,
-    lastdays = 600,
+    lastdays = max(range),
     rollwin = 1
   ))
 qs::qsave(statistics_csp_method, 
@@ -284,27 +307,23 @@ csp.all.sites = output_fit_summary.best.csp  %>%
   ggplot()+
   geom_segment(aes(y = window.open, yend = window.close, x = sitenewname, col = Collection_method), size = 2) +
   coord_flip()+
-  geom_hline(yintercept = 133, color = 'red')+
-  geom_hline(yintercept = 498, color = 'red')+
+  geom_hline(yintercept = 133, color = 'black', linetype = 'dashed')+
+  geom_hline(yintercept = 498, color = 'black', linetype = 'dashed')+
   ylim(0,600)+
   scale_color_brewer(palette = "Dark2")+
-  scale_fill_brewer(palette = "Dark2")
+  scale_fill_brewer(palette = "Dark2")+
+  scale_color_futurama()+
+  scale_fill_futurama()+
+  ggpubr::theme_cleveland()+
+  theme(legend.position = 'bottom', legend.title = element_blank())+
+  ylab('Days reversed')
 csp.all.sites
 
-cowplot::save_plot("csp_allsites_methods.png",csp.all.sites, ncol = 1.5, nrow = 1.5, dpi = 300)
+cowplot::save_plot(here("figures/csp_allsites_methods.png"),csp.all.sites, ncol = 1.5, nrow = 1.8, dpi = 300)
 
 
 quibble2(output_fit_summary.best.csp$window.open, q = c(0.25, 0.5, 0.75))
 quibble2(output_fit_summary.best.csp$window.close, q = c(0.25, 0.5, 0.75))
-
-
-#no subset 
-ggplot(statistics_csp_method)+
-  geom_segment(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
-  coord_flip()+
-  geom_hline(yintercept = 133, color = 'red')+
-  geom_hline(yintercept = 498, color = 'red')+
-  ylim(0,547)
 
 #change name here between closing and opning I mixed them 
 quibble2(statistics_csp_method$window.open, q = c(0.25, 0.5, 0.75))
@@ -329,6 +348,7 @@ statistics_psr_method = map_dfr(
     seed.data = Fagus.seed,  # Use .x correctly here
     tot_days = max(range),
     matrice = c(3,1),
+    refday = 305,
     knots = NULL
   )
 )
@@ -341,9 +361,16 @@ ggplot(statistics_psr_method %>%
   geom_segment(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
   geom_point(aes(y = window.open, x = sitenewname), size = 2) +
   coord_flip()+
-  geom_hline(yintercept = 133, color = 'red')+
-  geom_hline(yintercept = 498, color = 'red')+
-  ylim(0,600)
+  geom_hline(yintercept = 133, color = 'black', linetype = 'dashed')+
+  geom_hline(yintercept = 498, color = 'black', linetype = 'dashed')+
+  ylim(0,600)+
+  scale_color_brewer(palette = "Dark2")+
+  scale_fill_brewer(palette = "Dark2")+
+  scale_color_futurama()+
+  scale_fill_futurama()+
+  ggpubr::theme_cleveland()+
+  theme(legend.position = 'bottom', legend.title = element_blank())+
+  ylab('Days reversed')
 
 output_fit_summary.psr.best = statistics_psr_method  %>% 
   group_by(sitenewname) %>% 
@@ -357,14 +384,19 @@ psr.all.sites =  output_fit_summary.psr.best%>%
   geom_segment(aes(y = window.open, yend = window.close, x = sitenewname, col = Collection_method), size = 2) +
   geom_point(aes(y = window.open, x = sitenewname, col = Collection_method), size = 2, shape = 15) +
   coord_flip()+
-  geom_hline(yintercept = 133, color = 'red')+
-  geom_hline(yintercept = 498, color = 'red')+
+  geom_hline(yintercept = 133, color = 'black', linetype = 'dashed')+
+  geom_hline(yintercept = 498, color = 'black', linetype = 'dashed')+
   ylim(0,600)+
   scale_color_brewer(palette = "Dark2")+
-  scale_fill_brewer(palette = "Dark2")
+  scale_fill_brewer(palette = "Dark2")+
+  scale_color_futurama()+
+  scale_fill_futurama()+
+  ggpubr::theme_cleveland()+
+  theme(legend.position = 'bottom', legend.title = element_blank())+
+  ylab('Days reversed')
 psr.all.sites
 
-cowplot::save_plot(here("figures/psr_allsites_methods.png"),psr.all.sites, ncol = 1.5, nrow = 1.5, dpi = 300)
+cowplot::save_plot(here("figures/psr_allsites_methods.png"),psr.all.sites, ncol = 1.5, nrow = 1.8, dpi = 300)
 
 
 quibble2(output_fit_summary.psr.best$window.close, q = c(0.25, 0.5, 0.75))
@@ -384,7 +416,7 @@ statistics_basic_method = map_dfr(
     Fagus.seed = Fagus.seed, 
     climate.path = climate.beech.path,
     refday = 305,
-    lastdays = 600,
+    lastdays = max(range),
     rollwin = 1
   ))
 
@@ -400,11 +432,16 @@ basic.all.sites = output_fit_summary.basic.best %>%
   ggplot()+
   geom_segment(aes(y = window.open, yend = window.close, x = sitenewname, col = Collection_method), size = 2) +
   coord_flip()+
-  geom_hline(yintercept = 133, color = 'red')+
-  geom_hline(yintercept = 498, color = 'red')+
+  geom_hline(yintercept = 133, color = 'black', linetype = 'dashed')+
+  geom_hline(yintercept = 498, color = 'black', linetype = 'dashed')+
   ylim(0,600)+
   scale_color_brewer(palette = "Dark2")+
-  scale_fill_brewer(palette = "Dark2")
+  scale_fill_brewer(palette = "Dark2")+
+  scale_color_futurama()+
+  scale_fill_futurama()+
+  ggpubr::theme_cleveland()+
+  theme(legend.position = 'bottom', legend.title = element_blank())+
+  ylab('Days reversed')
 basic.all.sites
 cowplot::save_plot(here("figures/basic_allsites_methods.png"),basic.all.sites, ncol = 1.5, nrow = 1.5, dpi = 300)
 
@@ -414,17 +451,17 @@ quibble2(output_fit_summary.basic.best$window.close, q = c(0.25, 0.5, 0.75))
 #put a long lag 
 windows.avg = output_fit_summary.basic.best %>% 
   dplyr::select(sitenewname, window.open,  window.close) %>% 
-  mutate(method = 'signal.process') %>% 
+  mutate(method = 'Signal processing') %>% 
   bind_rows(output_fit_summary.psr.best%>% 
               dplyr::select(sitenewname, window.open, window.close) %>% 
-              mutate(method = 'p.spline.reg')) %>% 
+              mutate(method = 'P-spline regression')) %>% 
   bind_rows(statistics_absolute_climwin %>% 
               dplyr::select(sitenewname, WindowOpen, WindowClose) %>% rename(window.open = WindowOpen,
                                                                              window.close = WindowClose) %>% 
-              mutate(method = 'climwin.abs')) %>% 
+              mutate(method = 'Sliding time window')) %>% 
   bind_rows(output_fit_summary.best.csp %>% 
               dplyr::select(sitenewname, window.open , window.close) %>% 
-              mutate(method = 'climate.sens.profil') )%>%
+              mutate(method = 'Climate sensitivity profile') )%>%
   group_by(method) %>%
   summarise(wind.open_median = median(window.open, na.rm = TRUE),
             wind.close_median = median(window.close, na.rm = TRUE),
@@ -437,7 +474,7 @@ windows.avg = output_fit_summary.basic.best %>%
             wind.open_se = se(window.open),
             wind.close_se = se(window.close))
 
-
+library(RColorBrewer)
 median.windows.plot = windows.avg %>% 
   dplyr::select(method, wind.open_median:wind.open_q75) %>% 
   pivot_longer(starts_with('wind'), names_to = 'typewind') %>% 
@@ -454,6 +491,8 @@ ggplot(aes(x = method, group = windows.type, col = windows.type)) +
   xlab('')+ylab('Days reversed')+
   scale_color_brewer(palette = "Paired")+
   scale_fill_brewer(palette = "Paired")+
+  scale_colour_manual(values = brewer.pal(6, "Paired")[c(5,6)])+
+  scale_colour_manual(values = brewer.pal(6, "Paired")[c(5,6)])+
   ggpubr::theme_pubr()+
   theme(legend.position = c(.8,.8),
         legend.title = element_blank())+
@@ -462,32 +501,42 @@ ggplot(aes(x = method, group = windows.type, col = windows.type)) +
 #GENERIC PLOT R2 and AIC
 bestr2 = output_fit_summary.basic.best %>% 
   dplyr::select(sitenewname, r2, AIC) %>% 
-  mutate(method = 'signal.process') %>% 
+  mutate(method = 'Signal processing') %>% 
   bind_rows(output_fit_summary.psr.best%>% 
               dplyr::select(sitenewname, r2, AIC) %>% 
-              mutate(method = 'p.spline.reg')) %>% 
+              mutate(method = 'P-spline regression')) %>% 
   bind_rows(statistics_absolute_climwin %>% 
               dplyr::select(sitenewname, R2, AIC) %>% rename(r2 = R2) %>% 
-              mutate(method = 'climwin.abs')) %>% 
+              mutate(method = 'Sliding time window')) %>% 
   bind_rows(output_fit_summary.best.csp %>% 
               dplyr::select(sitenewname, r2, AIC) %>% 
-              mutate(method = 'climate.sens.profil') )
+              mutate(method = 'Climate sensitivity profile') )
 
 mean_r2 <- bestr2 %>%
   group_by(method) %>%
   summarise(mean_r2 = median(r2, na.rm = TRUE))
 
 averagedensr2method = bestr2 %>% 
-  ggplot(aes(x = r2, fill = method)) +
-  geom_density(alpha = 0.4) +
+  ggplot(aes(x = r2, fill = method, col = method)) +
+  geom_density(alpha = 0.2, size = .8) +
   labs(x = "R-squared (r2)", y = "Density") +
-  geom_vline(data = mean_r2, aes(xintercept = mean_r2, color = method),
-             linetype = "dashed", size = 1) +
+  #geom_vline(data = mean_r2, aes(xintercept = mean_r2, color = method),
+  #           linetype = "dashed", size = .5) +
   ggpubr::theme_pubclean()+
-  theme(legend.position = c(.9, .8))
+  geomtextpath::geom_textvline(data = mean_r2, 
+                 aes(label = round(mean_r2,3), color = method, xintercept = mean_r2),
+                 vjust = -0.3,
+                 hjust = 1,
+                 fontface = 'bold',
+                 linetype = 'dashed',show.legend = FALSE)+
+  scale_color_viridis_d(name = 'Method')+
+  scale_fill_viridis_d(name = 'Method')+
+  guides(col=guide_legend(ncol=2))+
+  theme(legend.position="bottom", legend.box="vertical", legend.margin=margin())
 
 averagedensr2method
-cowplot::save_plot(here("figures/averager2.method.png"),averagedensr2method+median.windows.plot, ncol = 1.8, nrow = 1.4, dpi = 300)
+cowplot::save_plot(here("figures/averager2.method.png"),averagedensr2method+median.windows.plot+plot_annotation(tag_levels = 'a') & 
+                     theme(plot.tag = element_text(size = 12)), ncol = 1.8, nrow = 1.4, dpi = 300)
 
 
 ####################################################################################
@@ -498,25 +547,16 @@ cowplot::save_plot(here("figures/averager2.method.png"),averagedensr2method+medi
 ##############################################################################
 #######################
 #now test the frac dataset 
-run_sampling_fraction_all_methods = function(fraction = 0.5){
+library(purrr)
+library(broom)
+run_sampling_fraction_all_methods = function(fraction = .3, 
+                                             range, 
+                                             Fagus.seed , 
+                                             beech.site.all, 
+                                             climate.path){
   
-  Fagus.seed.subseting50 = initial.data.mastree %>%
-    filter(!Variable == "flower" & VarType == "C" & !Unit=="index" & !Variable == "pollen") %>% 
-    group_by(Species, VarType) %>% 
-    mutate(nMax = n()) %>% 
-    filter(Species == "Fagus sylvatica") %>% 
-    #filter(Unit == "seeds/m2" | Unit == "seeds/individual") %>% 
-    filter(Year > 1952 & Year < 2021) %>% 
-    mutate(sitenewname= paste0(Alpha_Number, "_",Site_number, "_", Species_code)) %>% 
-    group_by(sitenewname) %>% 
-    mutate(log.seed = log(1+Value),
-           scale.seed = scale(Value),
-           n = n()) %>% 
-    filter(n > 20) %>% #initially 14
-    mutate() %>% 
-    mutate(Date = paste0( "15/06/",Year)) %>% 
-    mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y"),
-           plotname.lon.lat = paste0("longitude=",Longitude, "_","latitude=", Latitude)) %>% 
+  seed.data = Fagus.seed %>% 
+    ungroup() %>% 
     group_by(plotname.lon.lat) %>%   
     sample_frac(fraction) %>%        
     ungroup() %>% 
@@ -525,220 +565,218 @@ run_sampling_fraction_all_methods = function(fraction = 0.5){
   #run climwin 
   library(furrr)#make it in parallele, https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html
   plan(multisession)#background R sessions (on current machine) , the computer is flying (alt cluster)
-  
-  statistics_absolute_climwin_50 = future_map_dfr(
-    beech.site.all, 
-    ~ climwin_site_days(
-      climate.beech.path = climate.beech.path,
-      data = Fagus.seed.subseting50 %>% 
-        filter(plotname.lon.lat == .x),  # Use .x correctly here
-      site.name = .x,
-      range = range,
-      cinterval = 'day',
-      refday = c(01, 11),
-      optionwindows = 'absolute',
-      climate_var = 'TMEAN'
-    )
+  #but because of that you might need to restart R before ... 
+  statistics_absolute_climwin_frac <- future_map_dfr(
+    beech.site.all,
+    ~ {
+      # format the climate, .x is the current site
+      climate_data <- format_climate_data(site = .x ,
+                                          path = climate.beech.path,
+                                          scale.climate = T)
+      # Run climwin per site
+      climwin_site_days(
+        climate_data = climate_data,
+        data = seed.data %>% filter(plotname.lon.lat == .x),
+        site.name = .x,
+        range = range,
+        cinterval = 'day',
+        refday = c(01, 11),
+        optionwindows = 'absolute',
+        climate_var = 'TMEAN'
+      )
+    }
   )
   
-  results.moving.site_50 = FULL.moving.climate.analysis(Fagus.seed = Fagus.seed.subseting50,
-                                                        climate.beech.path = climate.beech.path,
+  results.moving.site_frac = FULL.moving.climate.analysis(seed.data.all = seed.data,
+                                                        climate.path = climate.path,
                                                         refday = 305,
                                                         lastdays = max(range),
                                                         rollwin = 1)
   
-  Results_daily_50 = results.moving.site_50 %>%
+  
+  Results_daily_frac = results.moving.site_frac %>%
     arrange(plotname.lon.lat) %>% 
     group_by(plotname.lon.lat) %>%
     group_split()
   
-  name_daily_50 =   results.moving.site_50 %>% 
+  name_daily_frac =   results.moving.site_frac %>% 
     arrange(plotname.lon.lat) %>% 
     group_by(plotname.lon.lat) %>%
     group_keys()
   
   # Set names of the list based on group keys - run csp
-  names(Results_daily_50) <- apply(name_daily_50, 1, paste)
+  names(Results_daily_frac) <- apply(name_daily_frac, 1, paste)
   
-  statistics_csp_method_50 = map_dfr(
-    1:length(Results_daily_50), 
+  statistics_csp_method_frac = map_dfr(
+    1:length(Results_daily_frac), 
     ~CSP_function_site(
-      Results_daily_50[[.]], 
-      unique(Results_daily_50[[.]]$plotname.lon.lat),
-      Fagus.seed = Fagus.seed.subseting50, 
-      climate.beech.path = climate.beech.path,
+      Results_daily_frac[[.]], 
+      unique(Results_daily_frac[[.]]$plotname.lon.lat),
+      seed.data = seed.data, 
+      climate.path = climate.path,
       refday = 305,
-      lastdays = 600,
+      lastdays = max(range),
       rollwin = 1
     ))
   
+  
   #run psr 
-  statistics_psr_method_50 = map_dfr(
-    site, 
+  statistics_psr_method_frac = map_dfr(
+    beech.site.all, 
     ~ PSR_function_site(
       site = .x,
-      Fagus.seed = Fagus.seed.subseting50,  # Use .x correctly here
+      climate.path = climate.path,
+      seed.data = seed.data,  # Use .x correctly here
       tot_days = max(range),
-      lastdays = 600,
+      refday = 305,
       matrice = c(3,1),
       knots = NULL
     )
   )
   
   #run basic 
-  statistics_basic_method_50 = map_dfr(
-    1:length(Results_daily_50), 
+  statistics_basic_method_frac = map_dfr(
+    1:length(Results_daily_frac), 
     ~basiccues_function_site(
-      Results_daily_50[[.]], 
-      unique(Results_daily_50[[.]]$plotname.lon.lat),
-      Fagus.seed = Fagus.seed.subseting50, 
-      climate.beech.path = climate.beech.path,
+      Results_daily_frac[[.]], 
+      unique(Results_daily_frac[[.]]$plotname.lon.lat),
+      seed.data = seed.data, 
+      climate.path = climate.path,
       refday = 305,
       lastdays = 600,
       rollwin = 1
     ))
   
-  list.all = list(statistics_absolute_climwin_50,
-                  statistics_csp_method_50,
-                  statistics_psr_method_50,
-                  statistics_basic_method_50)
+  #add method character for each tible 
+  list.all.mm = list(statistics_absolute_climwin_frac%>% dplyr::mutate(method = 'climwin'),
+                  statistics_csp_method_frac %>% dplyr::mutate(method = 'csp'),
+                  statistics_psr_method_frac %>% dplyr::mutate(method = 'psr'),
+                  statistics_basic_method_frac %>% dplyr::mutate(method = 'signal'))
+  
+  #just add the percentage used 
+  list.all = lapply(list.all.mm, function(df) {
+    df <- df %>%
+      dplyr::mutate(sample_fraction = fraction)  # Add sample_fraction column
+    return(df)
+  })
+  
   return(list.all)
 }
 
 
-sample30percent = run_sampling_fraction_all_methods(fraction = 0.3)
-sample50percent = run_sampling_fraction_all_methods(fraction = 0.5)
-sample70percent = run_sampling_fraction_all_methods(fraction = 0.7)
-#sample90percent = run_sampling_fraction_all_methods(fraction = 0.9)
+#take more than 10 hours if 10 simulations (climwin takes some times)
+# Initialize a list to store all results
+result_list_all <- list()
+
+# Define the sample fractions you want to iterate over
+fractions <- c(0.3, 0.5, 0.7, 0.9)
+
+# Define the number of iterations for each fraction
+n_iter <- 10 #take > 12 and < 24 hours on mac os 
+
+# Outer loop to iterate over the fractions
+for (fraction in fractions) {
+  
+  # Initialize a list to store results for each fraction
+  result_list <- list()
+  
+  # Inner loop to perform the operation multiple times for the given fraction
+  for (i in 1:n_iter) {
+    # Get the sample list for the given fraction
+    sample_result <- run_sampling_fraction_all_methods(fraction = fraction,
+                                                       range = range, 
+                                                       Fagus.seed = Fagus.seed, 
+                                                       beech.site.all = beech.site.all, 
+                                                       climate.path = climate.beech.path)
+    
+    # Append this sample's results to the overall list for this fraction
+    result_list[[i]] <- sample_result
+  }
+  
+  # Store the results for this fraction in the overall list, using the fraction as the key
+  result_list_all[[paste0("fraction_", fraction * 100)]] <- result_list
+}
+
+#for me to change the name from climwin output 
+rename_columns_if_needed <- function(df) {
+  if ("WindowOpen" %in% colnames(df)) {
+    df <- df %>%
+      rename(window.open = WindowOpen)
+  }
+  if ("WindowClose" %in% colnames(df)) {
+    df <- df %>%
+      rename(window.close = WindowClose)
+  }
+  return(df)
+}
 
 
+final_combined_df <- map_dfr(names(result_list_all), function(sublist) {
+  # extract my sublist 
+  new_list <- result_list_all[[sublist]]
+  new_list[[1]] <- lapply(new_list[[1]], rename_columns_if_needed)  # Apply renaming to the first list
+  
+  
+  # rbind dplyr 
+  datatible.sim <- bind_rows(new_list)
+  return(datatible.sim)
+})
 
-
-
-climwin.sensi = sample30percent[[1]] %>% 
-  dplyr::select(sitenewname, WindowOpen, WindowClose) %>% 
-  pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
-  left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed)) %>% dplyr::select(sitenewname, name, days.reversed) %>% 
-  pivot_wider(names_from = "name", values_from = "days.reversed") %>% 
-  mutate(sample.size = '0.3') %>% 
-  bind_rows(
-    sample50percent[[1]] %>% 
-  dplyr::select(sitenewname, WindowOpen, WindowClose) %>% 
-  pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
-  left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed)) %>% dplyr::select(sitenewname, name, days.reversed) %>% 
-  pivot_wider(names_from = "name", values_from = "days.reversed") %>% 
-  mutate(sample.size = '0.5')) %>% 
-  bind_rows(
-    sample70percent[[1]] %>% 
-      dplyr::select(sitenewname, WindowOpen, WindowClose) %>% 
-      pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
-      left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed)) %>% dplyr::select(sitenewname, name, days.reversed) %>% 
-      pivot_wider(names_from = "name", values_from = "days.reversed") %>% 
-      mutate(sample.size = '0.7')) %>% 
-  rename(window.open = WindowOpen,window.close = WindowClose) %>% 
-  mutate(method = 'climwin.abs')
-
-csp.sensi = sample30percent[[2]]  %>% 
-  group_by(sitenewname) %>% 
-  slice(which.max(r2))%>% 
-  ungroup()%>% 
-  dplyr::select(sitenewname, window.open , window.close)%>% 
-  mutate(sample.size = '0.3') %>% 
-  bind_rows(sample50percent[[2]]  %>% 
-              group_by(sitenewname) %>% 
-              slice(which.max(r2))%>% 
-              ungroup()%>% 
-              dplyr::select(sitenewname, window.open , window.close)%>% 
-              mutate(sample.size = '0.5') ) %>% 
-  bind_rows(sample70percent[[2]]  %>% 
-              group_by(sitenewname) %>% 
-              slice(which.max(r2))%>% 
-              ungroup()%>% 
-              dplyr::select(sitenewname, window.open , window.close)%>% 
-              mutate(sample.size = '0.7') )%>% 
-  mutate(method = 'csp')
-
-psr.sensi = sample30percent[[3]]  %>% 
-  group_by(sitenewname) %>% 
-  slice(which.max(r2))%>% 
-  ungroup()%>% 
-  dplyr::select(sitenewname, window.open , window.close)%>% 
-  mutate(sample.size = '0.3') %>% 
-  bind_rows(sample50percent[[3]]  %>% 
-              group_by(sitenewname) %>% 
-              slice(which.max(r2))%>% 
-              ungroup()%>% 
-              dplyr::select(sitenewname, window.open , window.close)%>% 
-              mutate(sample.size = '0.5') ) %>% 
-  bind_rows(sample70percent[[3]]  %>% 
-              group_by(sitenewname) %>% 
-              slice(which.max(r2))%>% 
-              ungroup()%>% 
-              dplyr::select(sitenewname, window.open , window.close)%>% 
-              mutate(sample.size = '0.7') )%>% 
-  mutate(method = 'psr')
-
-basic.sensi = sample30percent[[4]]  %>% 
-  group_by(sitenewname) %>% 
-  slice(which.max(r2))%>% 
-  ungroup()%>% 
-  dplyr::select(sitenewname, window.open , window.close)%>% 
-  mutate(sample.size = '0.3') %>% 
-  bind_rows(sample50percent[[4]]  %>% 
-              group_by(sitenewname) %>% 
-              slice(which.max(r2))%>% 
-              ungroup()%>% 
-              dplyr::select(sitenewname, window.open , window.close)%>% 
-              mutate(sample.size = '0.5') ) %>% 
-  bind_rows(sample70percent[[4]]  %>% 
-              group_by(sitenewname) %>% 
-              slice(which.max(r2))%>% 
-              ungroup()%>% 
-              dplyr::select(sitenewname, window.open , window.close)%>% 
-              mutate(sample.size = '0.7') )%>% 
-  mutate(method = 'basic')
-
-windows.avg.sensitivity = basic.sensi%>%
-  bind_rows(psr.sensi) %>% 
-  bind_rows(csp.sensi) %>% 
-  bind_rows(climwin.sensi) %>% 
-  group_by(method,sample.size) %>%
+#qs::qsave(final_combined_df, here('final_combined_df.qs'))
+summary.test.sampling = final_combined_df %>% 
+  group_by(method,sample_fraction) %>%
   summarise(wind.open_median = median(window.open, na.rm = TRUE),
             wind.close_median = median(window.close, na.rm = TRUE),
-            wind.close_q25 = quantile(window.close, 0.25, na.rm = TRUE),
-            wind.close_q75 = quantile(window.close, 0.75, na.rm = TRUE),
-            wind.open_q25 = quantile(window.open, 0.25, na.rm = TRUE),
-            wind.open_q75 = quantile(window.open, 0.75, na.rm = TRUE),
+            wind.close_q25 = quantile(window.close, 0.3, na.rm = TRUE),
+            wind.close_q75 = quantile(window.close, 0.7, na.rm = TRUE),
+            wind.open_q25 = quantile(window.open, 0.3, na.rm = TRUE),
+            wind.open_q75 = quantile(window.open, 0.7, na.rm = TRUE),
             wind.open_mean = mean(window.open),
             wind.close_mean = mean(window.close),
             wind.open_se = se(window.open),
             wind.close_se = se(window.close))
 
 
-sensi.data.plot = windows.avg.sensitivity %>% 
-  dplyr::select(method, sample.size, wind.open_median:wind.open_q75) %>% 
+
+sensi.data.plot = summary.test.sampling %>% 
+  dplyr::select(method, sample_fraction, wind.open_median:wind.open_q75) %>% 
   pivot_longer(starts_with('wind'), names_to = 'typewind') %>% 
   separate_wider_delim(typewind, delim = '_', names=c('windows.type', 'metric')) %>% 
   pivot_wider(names_from = 'metric', values_from = value) %>% 
-  mutate(sample.size = as.numeric(sample.size),
-         method_sample = paste(method, sample.size, sep = " (n=") %>% paste0(")")) %>% 
-  ggplot(aes(x = method_sample, group = windows.type, col = windows.type)) +
+  mutate(sample_fraction = as.numeric(sample_fraction),
+         method_sample = paste(method, sample_fraction, sep = " (n=") %>% paste0(")"),
+         sample_fraction_factor = as_factor(paste0(sample_fraction*100, '%'))) %>% 
+  ggplot(aes(x = sample_fraction_factor, group = windows.type, col = windows.type)) +
   geom_point(aes(y = median), size = 2,
              position = position_dodge(width = 0.5)) +
   geom_pointrange(mapping = aes(y = median, ymin = q25, ymax = q75), 
                   position = position_dodge(width = 0.5)) +
   coord_flip() +
+  facet_wrap(.~method, scales = 'free_y')+
   xlab('Method (Sample Size)') + 
   ylab('Days reversed') +
-  scale_color_brewer(palette = "Paired") +
-  scale_fill_brewer(palette = "Paired") +
-  ggpubr::theme_pubr() +
   theme(legend.position = 'bottom',
         legend.title = element_blank()) +
-  geom_hline(yintercept = 498, color = 'black', linetype = 'dashed')
+  geom_hline(yintercept = 498, color = 'black', linetype = 'dashed')+
+  scale_colour_manual(values = RColorBrewer::brewer.pal(6, "Paired")[c(5,6)])+
+  scale_colour_manual(values = RColorBrewer::brewer.pal(6, "Paired")[c(5,6)])+
+  ggpubr::theme_pubr()+
+  theme(legend.position = 'bottom',
+        legend.title = element_blank())
 
 sensi.data.plot
+
 cowplot::save_plot(here("figures/sensitivity.method.png"),sensi.data.plot, ncol = 1.4, nrow = 1.4, dpi = 300)
+
+
+
+
+
+depends: ggplot2
+Imports: dplyr 
+
+
+
 
 
 
@@ -751,13 +789,13 @@ Quercus.seed = initial.data.mastree %>%
   filter(str_detect(Species, 'Quercus robur|Quercus petraea|Quercus spp.')) %>% 
   filter(!str_detect(Country, 'United States of America|Russian Federation (the)')) %>% 
   #filter(Unit == "seeds/m2" | Unit == "seeds/individual") %>% 
-  filter(Year > 1952 & Year < 2021) %>% 
+  filter(Year > 1952 & Year < 2023) %>% 
   mutate(sitenewname= paste0(Alpha_Number, "_",Site_number, "_", Species_code)) %>% 
   group_by(sitenewname) %>% 
   mutate(log.seed = log(1+Value),
          scale.seed = scale(Value),
          n = n()) %>% 
-  filter(n > 20) %>% #initially 14
+  filter(n > 19) %>% #initially 14
   mutate() %>% 
   mutate(Date = paste0( "15/06/",Year)) %>% 
   mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y"),
@@ -768,31 +806,35 @@ Quercus.seed = initial.data.mastree %>%
   as.data.frame()
 
 quercus.site.all = unique(Quercus.seed$plotname.lon.lat)
-#they have same length, each sites are unique here! 
 
-# Define a function to process each site
-#I want the function to work only for one site
-#option to run in parallel to make it faster
 run.climwin <- T
 #take some time ! 
 if(run.climwin==T){
   library(furrr)#make it in parallele, https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html
   plan(multisession)#background R sessions (on current machine) , the computer is flying (alt cluster)
   
-  statistics_absolute_climwin_quercus = future_map_dfr(
+  
+  statistics_absolute_climwin_quercus <- future_map_dfr(
     quercus.site.all, 
-    ~ climwin_site_days(
-      climate.path = climate.beech.path,
-      data = Quercus.seed %>% 
-        filter(plotname.lon.lat == .x),  # Use .x correctly here
-      site.name = .x,
-      range = range,
-      cinterval = 'day',
-      refday = c(01, 11),
-      optionwindows = 'absolute',
-      climate_var = 'TMEAN'
-    )
+    ~ {
+      # format the climate, .x is the current site
+      climate_data <- format_climate_data(site = .x ,
+                                          path = climate.beech.path, 
+                                          scale.climate = T)  
+      # Run climwin per site
+      climwin_site_days(
+        climate_data = climate_data,
+        data = Quercus.seed %>% filter(plotname.lon.lat == .x),  
+        site.name = .x,  
+        range = range,
+        cinterval = 'day',
+        refday = c(01, 11),  
+        optionwindows = 'absolute',  
+        climate_var = 'TMEAN'  
+      )
+    }
   )
+  
   qs::qsave(statistics_absolute_climwin_quercus, 
             here('statistics_absolute_climwin_QUERCUS.qs'))}else{
               statistics_absolute_climwin_quercus = qs::qread('statistics_absolute_climwin_QUERCUS.qs')
@@ -800,23 +842,22 @@ if(run.climwin==T){
 
 
 format.quercus.win = statistics_absolute_climwin_quercus %>% 
-  dplyr::select(sitenewname, estimate, WindowOpen, WindowClose) %>% 
-  pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
+  dplyr::select(sitenewname, slope.estimate, window.open, window.close) %>% 
+  pivot_longer(window.open:window.close, values_to = 'days.reversed') %>% 
   left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed)) 
 
 
 methods.collection.quercus = Quercus.seed %>% dplyr::select(sitenewname, Country, Collection_method, Length, Longitude, Latitude) %>% distinct()
 
 
-format.quercus.win %>% dplyr::select(sitenewname, estimate, name, days.reversed) %>% 
+format.quercus.win %>% dplyr::select(sitenewname, slope.estimate, name, days.reversed) %>% 
   pivot_wider(names_from = "name", values_from = "days.reversed") %>% 
-  mutate(sign = ifelse(estimate >0 , '+', '-')) %>% 
+  mutate(sign = ifelse(slope.estimate >0 , '+', '-')) %>% 
   left_join(methods.collection.quercus) %>% 
   arrange(Latitude) %>% 
   mutate(sitenewname = forcats::fct_reorder(sitenewname, Collection_method)) %>%
   ggplot()+
-  geom_segment(aes(y = WindowOpen, yend = WindowClose, x = sitenewname), size = 2) +
- # geom_point(aes(y = WindowOpen, x = sitenewname, col = Collection_method), size = 2) +
+  geom_segment(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
   coord_flip()+
   geom_hline(yintercept = 133, color = 'red')+
   geom_hline(yintercept = 498, color = 'red')+
@@ -829,14 +870,13 @@ plot_locations.quercus<- st_as_sf(Quercus.seed %>%
   st_set_crs(4326)
 
 Maps.quercus <- ggplot(data=mapBase$geometry)+ 
-  geom_sf(fill = "grey", colour = "grey")+ #plot map of France
+  geom_sf(fill = "grey90", colour = "black", alpha = .8, linewidth = .25)+ #plot map of France
   xlab(" ")+ ylab(" ")+ #white or aliceblue
-  #geom_sf(data = faguseuforgen, col = "#FFDB6D", fill = "#FFDB6D", alpha = 0.55, linewidth = .35)+
   geom_point(data = plot_locations.quercus %>%  mutate(x = unlist(map(geometry,1)),
                                                y = unlist(map(geometry,2)))%>% 
                as.data.frame(), aes(x = x , y = y, col = Collection_method, fill = Collection_method), 
              stroke = 1, alpha = .8,
-             shape = 21, size = 4.3)+ #size = rmse,
+             shape = 21, size = 3)+
   scale_size_continuous(
     breaks = c(0.1,0.3,0.8),
     range = c(0,7)
@@ -846,13 +886,16 @@ Maps.quercus <- ggplot(data=mapBase$geometry)+
   scale_x_continuous(breaks = c(-10, 0, 10, 20))+
   ylab("Latitude")+xlab("Longitude")+
   ggpubr::theme_pubr()+
-  scale_color_brewer(palette = "Dark2")+
-  scale_fill_brewer(palette = "Dark2")+
-  guides(col = "none", fill=guide_legend(title=NULL, override.aes = list(size=8)))
+  scale_color_futurama()+
+  scale_fill_futurama()+
+  guides(col = "none", fill=guide_legend(title=NULL, override.aes = list(size=8)))+
+  theme(legend.position = 'none')
+
+
 Maps.quercus
 
 #test csp 
-results.moving.site.quercus = FULL.moving.climate.analysis(Fagus.seed = Quercus.seed,
+results.moving.site.quercus = FULL.moving.climate.analysis(seed.data.all = Quercus.seed,
                                                    climate.path = climate.beech.path,
                                                    refday = 305,
                                                    lastdays = max(range),
@@ -874,46 +917,60 @@ statistics_csp_method.quercus = map_dfr(
   1:length(Results_daily.quercus), 
   ~CSP_function_site(
     Results_daily.quercus[[.]], 
-    unique(Results_daily.quercus[[.]]$sitenewname),
-    Fagus.seed = Quercus.seed%>% 
-      arrange(sitenewname), 
+    unique(Results_daily.quercus[[.]]$plotname.lon.lat),
+    seed.data = Quercus.seed %>% arrange(sitenewname), 
     climate.path = climate.beech.path,
     refday = 305,
-    lastdays = 600,
+    lastdays = max(range),
     rollwin = 1
   ))
 
-statistics_csp_method.quercus %>%
+quercus2method = statistics_csp_method.quercus %>%
   group_by(sitenewname) %>% 
-  dplyr::slice(which.max(r2))  %>% 
-  left_join(methods.collection.quercus) %>% 
+  dplyr::slice(which.max(r2))   %>% 
+  mutate(method = 'climate sensitivity profile') %>% 
   ungroup() %>% 
-  #arrange(Collection_method) %>% 
+  bind_rows(statistics_absolute_climwin_quercus %>% mutate(method = 'sliding moving window')) %>% 
+  left_join(methods.collection.quercus) %>% 
   mutate(sitenewname = forcats::fct_reorder(sitenewname, Collection_method)) %>%
   ggplot()+
-  geom_segment(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
+  geom_segment(aes(y = window.open, yend = window.close, x = sitenewname, col = Collection_method), size = 2) +
+  geom_point(aes(y = window.open, x = sitenewname, col = Collection_method, fill = Collection_method), size = 1.5, shape = 22) +
   coord_flip()+
-  geom_hline(yintercept = 133, color = 'red')+
-  geom_hline(yintercept = 498, color = 'red')+
+  geom_hline(yintercept = 133, color = 'black', linetype = 'dashed')+
+  geom_hline(yintercept = 498, color = 'black', linetype = 'dashed')+
   ylim(0,600)+
   scale_color_brewer(palette = "Dark2")+
-  scale_fill_brewer(palette = "Dark2")
+  scale_fill_brewer(palette = "Dark2")+
+  scale_color_futurama()+
+  scale_fill_futurama()+
+  ggpubr::theme_cleveland()+
+  theme(legend.position = 'bottom', legend.title = element_blank())+
+  ylab('Days reversed')+
+  facet_grid(method~.)+
+  theme(axis.text.y = element_blank())
 
-statistics_csp_method.quercus %>%
+R2quercus = statistics_csp_method.quercus %>%
   group_by(sitenewname) %>% 
   dplyr::slice(which.max(r2)) %>% 
   dplyr::select(sitenewname, r2) %>% 
-  mutate(method = 'CSP') %>% 
+  mutate(method = 'climate sensivitiy profil') %>% 
   bind_rows(statistics_absolute_climwin_quercus %>% 
               dplyr::select(sitenewname, R2) %>% 
               rename(r2 = R2) %>% 
-              mutate(method = 'climwin')) %>% 
+              mutate(method = 'sliding moving window')) %>% 
   ggplot(aes(x = r2, fill = method)) +
-  geom_density(alpha = 0.4) +
+  geom_density(alpha = 0.42) +
   labs(x = "R-squared (r2)", y = "Density") +
   ggpubr::theme_pubclean()+
-  theme(legend.position = c(.9, .8))
+  theme(legend.position = c(.9, .8))+
+  theme(legend.title = element_blank())+
+  scale_color_viridis_d(option = 'magma')+
+  scale_fill_viridis_d(option = 'magma')
 
+(Maps.quercus/R2quercus)
+Figure.quercus = cowplot::plot_grid((Maps.quercus/R2quercus), quercus2method, labels = 'auto')
+cowplot::save_plot(here("figures/Figure.quercus.png"),Figure.quercus, ncol = 1.8, nrow = 1.5, dpi = 300, bg = "white")
 
 ########################################################################
 ####################################################################################
@@ -922,8 +979,7 @@ statistics_csp_method.quercus %>%
 ######MAKE simulation study case with climwin 
 
 # Load necessary libraries
-library(dplyr)
-library(ggplot2)
+library(tidyverse)
 library(lubridate)
 
 
@@ -932,50 +988,224 @@ set.seed(123)
 startyear = 1940
 years <- startyear:2020
 days_per_year <- 365
-climate_data <- data.frame(
+climate_data_simulated <- data.frame(
   date = seq.Date(from = as.Date(paste0(startyear,"-01-01")), by = "day", length.out = length(years) * days_per_year),
   temp = runif(length(years) * days_per_year, min = 10, max = 30)  # random temperatures
 )
   
-climate_data <- climate_data %>%
+climate_data_simulated <- climate_data_simulated %>%
   mutate(year = format(date, "%Y"),
          day_of_year = yday(date),
-         year = as.numeric(year))
+         year = as.numeric(year)) %>%
+  mutate(across(c(temp), scale)) %>%
+  mutate(across(c(temp), as.vector))
 
 # Select ~ one week in June 
-june_week <- climate_data %>%
+june_week <- climate_data_simulated %>%
   filter(day_of_year >= 150 & day_of_year <= 160)
 
-#then make it strongly correlated to the climate window
-test.simulation <- function(simulation.bio.data = june_week,
-                           seed_production,
-                           sample.fraction = 1,
-                           correlation = 0.2){
-  seed_production <- simulation.bio.data %>%
-    group_by(year) %>%
-    summarise(mean_temp_june_week = mean(temp)) %>%
-    mutate(random_noise = rnorm(n(), mean = 0, sd = sd(mean_temp_june_week) * sqrt((1 - correlation^2) / correlation^2))) %>%
-    mutate(log.seed = log(round(100 + mean_temp_june_week * 5 + random_noise))) %>%
-    filter(year > startyear)%>% #to select one year less 
-    mutate(year = as.numeric(as.character(year))) %>% 
-    mutate(Date = paste0( "15/06/",year)) %>% #need a date, even if absolute window
-    mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y")) %>% #make it as in the climate date
-    sample_frac(sample.fraction)  
+
+raw.data.param.alpha = statistics_absolute_climwin$intercept.estimate
+raw.data.param.beta = statistics_absolute_climwin$slope.estimate
+raw.data.param.sigma = statistics_absolute_climwin$sigma
+
+
+#generate parameter range values for the simulation
+setup.param = parameter.range(raw.data.param.alpha,
+                           raw.data.param.beta,
+                           raw.data.param.sigma,
+                           option = 'min.max')
   
-  print(cor(seed_production$mean_temp_june_week, seed_production$log.seed))
+
+alpha.random.value = runif(1, min = setup.param$alpha[1], max = setup.param$alpha[2])
+beta.random.value = runif(1, min = setup.param$beta[1], max = setup.param$beta[2])
+sigma.random.value = runif(1, min = setup.param$sigma[1], max = setup.param$sigma[2])
+
+
+
+seed_production_simulated <- june_week %>%
+  group_by(year) %>%
+  summarise(mean_temp_june_week = mean(temp)) %>%
+  # Standardize the mean temperature for proper correlation, as in the main analysis
+  mutate(mean_temp_scaled = scale(mean_temp_june_week, center = TRUE, scale = TRUE)) %>%
+  # Generate log.seed with controlled correlation
+  mutate(log.seed = alpha.random.value + beta.random.value * mean_temp_scaled + rnorm(n(), mean = 0, sd = sigma.random.value))%>%
+  filter(year > startyear)%>% #to select one year less 
+  mutate(year = as.numeric(as.character(year))) %>% 
+  mutate(Date = paste0( "15/06/",year)) %>% #need a date, even if absolute window
+  mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y")) %>% #make it as in the climate date
+  sample_frac(sample.fraction)  
+
+reg.summary.simulation = summary(lm(log.seed~mean_temp_june_week, data = seed_production_simulated))
+r2sim.before.climwin = reg.summary.simulation$adj.r.squared
+
+simulation.cimwin = climwin::slidingwin(
+  xvar = list(temperature.degree = climate_data_simulated$temp),
+  cdate = climate_data_simulated$date,
+  bdate = seed_production_simulated$Date2,
+  baseline = lm(log.seed~1, data = seed_production_simulated),#i Needed to specify the formula here, if not it is not working properly
+  cinterval = 'day',
+  range = c(600, 0),
+  refday = c(01, 11),
+  type = 'absolute',
+  stat = "mean",
+  cmissing = 'method2',
+  func = "lin"
+)
+
+generate 1000 datasets
+then run simulation for the different methods 
+
+object.result = bind_cols(simulation.cimwin$combos,
+          r2.before.climwin = r2sim.before.climwin,
+          alpha.random.value.setup = alpha.random.value,
+          beta.random.value.setup = beta.random.value,
+          sigma.random.value.setup = sigma.random.value)
+
+
+simulate_seed_production <- function(setup.param, 
+                                     june_week, 
+                                     climate_data_simulated, 
+                                     startyear, 
+                                     sample.fraction = 1, 
+                                     num_simulations = 10) {
   
+  # Container to store results
+  results_list <- vector("list", num_simulations)
   
-  simulation1 = climwin_site_days(climate_data,
-                                  data = seed_production,
-                                  site.name = 'simulation', #character will be added in the final form file
-                                  range = c(600, 0),
-                                  cinterval = 'day',
-                                  refday = c(01, 11),
-                                  optionwindows = 'absolute',
-                                  climate_var = 'temp',
-                                  formulanull = formula(log.seed ~ 1)) 
-  return(simulation1 %>% mutate(sample.fraction.used = sample.fraction))
+  for (i in seq_len(num_simulations)) {
+    
+    # Randomly sample alpha, beta, and sigma from the provided ranges to the uniform
+    alpha.random.value <- runif(1, min = setup.param$alpha[1], max = setup.param$alpha[2])
+    beta.random.value <- runif(1, min = setup.param$beta[1], max = setup.param$beta[2])
+    sigma.random.value <- runif(1, min = setup.param$sigma[1], max = setup.param$sigma[2])
+    
+    # Simulate seed production, need same june week data, coming from the same climate data simulated
+    seed_production_simulated <- june_week %>%
+      group_by(year) %>%
+      summarise(mean_temp_june_week = mean(temp)) %>%
+      # Standardize the mean temperature for proper correlation, as in the main analysis
+      mutate(mean_temp_scaled = scale(mean_temp_june_week, center = TRUE, scale = TRUE)) %>%
+      # Generate log.seed with controlled correlation
+      mutate(log.seed = alpha.random.value + beta.random.value * mean_temp_scaled + 
+               rnorm(n(), mean = 0, sd = sigma.random.value)) %>%
+      filter(year > startyear) %>%
+      mutate(year = as.numeric(as.character(year))) %>%
+      mutate(Date = paste0("15/06/", year)) %>%
+      mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y")) %>%
+      sample_frac(sample.fraction)  
+    
+    # Run regression to get R^2 before climwin
+    reg.summary.simulation <- summary(lm(log.seed ~ mean_temp_june_week, data = seed_production_simulated))
+    r2sim.before.climwin <- reg.summary.simulation$adj.r.squared
+    
+    # Perform climwin analysis
+    simulation.climwin <- climwin::slidingwin(
+      xvar = list(temperature.degree = climate_data_simulated$temp),
+      cdate = climate_data_simulated$date,
+      bdate = seed_production_simulated$Date2,
+      baseline = lm(log.seed ~ 1, data = seed_production_simulated),
+      cinterval = 'day',
+      range = c(600, 0), #here I used the same as we used in the ms 
+      refday = c(01, 11), #main text 
+      type = 'absolute',
+      stat = "mean",
+      cmissing = 'method2',
+      func = "lin"
+    )
+    
+    # Bind results and store them
+    result <- bind_cols(simulation.climwin$combos,
+                        r2.before.climwin = r2sim.before.climwin,
+                        alpha.random.value.setup = alpha.random.value,
+                        beta.random.value.setup = beta.random.value,
+                        sigma.random.value.setup = sigma.random.value)
+    
+    results_list[[i]] <- result
+  }
+  
+  # Combine all results into a single dataframe
+  final_results <- bind_rows(results_list)
+  
+  return(final_results)
 }
+
+
+simulation1 = simulate_seed_production(setup.param, 
+                                     june_week, 
+                                     climate_data_simulated, 
+                                     startyear, 
+                                     sample.fraction = 1, 
+                                     num_simulations = 10) 
+simulation2 = simulate_seed_production(setup.param, 
+                                       june_week, 
+                                       climate_data_simulated, 
+                                       startyear, 
+                                       sample.fraction = 1, 
+                                       num_simulations = 100) 
+simulation3 = simulate_seed_production(setup.param, 
+                                       june_week, 
+                                       climate_data_simulated, 
+                                       startyear, 
+                                       sample.fraction = 1, 
+                                       num_simulations = 100) 
+simulation4 = simulate_seed_production(setup.param, 
+                                       june_week, 
+                                       climate_data_simulated, 
+                                       startyear, 
+                                       sample.fraction = 1, 
+                                       num_simulations = 100) 
+
+simulation5 = simulate_seed_production(setup.param, 
+                                       june_week, 
+                                       climate_data_simulated, 
+                                       startyear, 
+                                       sample.fraction = 1, 
+                                       num_simulations = 100) 
+
+
+
+
+
+simulation6 = simulate_seed_production(setup.param, 
+                                       june_week, 
+                                       climate_data_simulated, 
+                                       startyear, 
+                                       sample.fraction = 1, 
+                                       num_simulations = 100) 
+simulation7 = simulate_seed_production(setup.param, 
+                                       june_week, 
+                                       climate_data_simulated, 
+                                       startyear, 
+                                       sample.fraction = 1, 
+                                       num_simulations = 100) 
+
+simulation.all = bind_rows(simulation1, simulation2, simulation3, 
+          simulation4, simulation5, simulation6,
+          simulation7)
+
+simulation.all %>% 
+summarise(wind.open_median = median(WindowOpen, na.rm = TRUE),
+          wind.close_median = median(WindowClose, na.rm = TRUE),
+          wind.close_q25 = quantile(WindowClose, 0.25, na.rm = TRUE),
+          wind.close_q75 = quantile(WindowClose, 0.75, na.rm = TRUE),
+          wind.open_q25 = quantile(WindowOpen, 0.25, na.rm = TRUE),
+          wind.open_q75 = quantile(WindowOpen, 0.75, na.rm = TRUE)) %>% 
+  dplyr::select(wind.open_median:wind.open_q75) %>% 
+  pivot_longer(starts_with('wind'), names_to = 'typewind') %>% 
+  separate_wider_delim(typewind, delim = '_', names=c('windows.type', 'metric')) %>% 
+  pivot_wider(names_from = 'metric', values_from = value) %>% 
+  left_join(calendar.climwin %>% mutate(median = days.reversed))
+
+hist(simulation.all$r2.before.climwin)
+quantile(simulation.all$r2.before.climwin, 0.75, na.rm = TRUE)
+quantile(simulation.all$r2.before.climwin, 0.25, na.rm = TRUE)
+
+#find when correct value 
+perfectwin = simulation.all %>% filter(between( WindowOpen, 150, 160),
+                                       between( WindowClose, 140, 150))
+summary(perfectwin$r2.before.climwin)
+
 
 seq.sim = seq(0.3,0.9,0.1)
 test.simulation.results = NULL
@@ -998,7 +1228,7 @@ test.simulation.results %>%
 
 
 #climwin need to adjust for 0 - 1, row start at 0 and not 1 
-calendar = goingbackpastdayscalendar(refday = 304,
+calendar.climwin = goingbackpastdayscalendar(refday = 304,
                                      lastdays = 600, 
                                      yearback = 2) %>% 
   filter(YEAR == 1950) %>% 

@@ -1,5 +1,5 @@
 #' Perform Climate Window Analysis - based on Climate sensitivity profil from Thackeray et al
-#' note that some function have been obtained or adjusted from this paper OR also from Simmonds et al
+#' note that some function have been obtained or adjusted from Thackeray et al paper OR also from Simmonds et al
 #' 
 #' 
 #' 
