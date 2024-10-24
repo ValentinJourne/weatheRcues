@@ -101,12 +101,7 @@ package to **{{ TITLE }}**. R package version 0.0.0.9000.
 
 ## Contributing
 
-All types of contributions are encouraged and valued. For more information, 
-check out our [Contributor Guidelines](https://github.com/ValentinJourne/weatheRcues/blob/main/CONTRIBUTING.md).
-
-Please note that the `weatheRcues` project is released with a 
-[Contributor Code of Conduct](https://contributor-covenant.org/version/2/1/CODE_OF_CONDUCT.html). 
-By contributing to this project, you agree to abide by its terms.
+This code is mostly based on previous code, study, etc. Feel free to adjust the code as you want. In case you have any question, please contact us. 
 
 
 

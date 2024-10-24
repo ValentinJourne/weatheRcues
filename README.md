@@ -1,1 +1,94 @@
 
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+# weatheRcues <img src="man/figures/package-sticker.png" align="right" style="float:right; height:120px;"/>
+
+<!-- badges: start -->
+<!-- badges: end -->
+<p align="left">
+• <a href="#overview">Overview</a><br> •
+<a href="#features">Features</a><br> •
+<a href="#installation">Installation</a><br> •
+<a href="#get-started">Get started</a><br> •
+<a href="#long-form-documentations">Long-form documentations</a><br> •
+<a href="#citation">Citation</a><br> •
+<a href="#contributing">Contributing</a><br> •
+<a href="#acknowledgments">Acknowledgments</a><br> •
+<a href="#references">References</a>
+</p>
+
+## Overview
+
+The R code `weatheRcues` was developed to make comparison of weather
+cues method on biological data, here seed production data. We used here
+already developed R package (i.e. climwin) but also alternative methods,
+now accessible in R code from Simmonds et al. The current study is
+already ongoing.
+
+## Features
+
+The main purpose of `weatheRcues` is to compare different methods to
+identify weather cues; i.e. what triggers or inhibitors of seed
+production.
+
+## Installation
+
+You can install the development version from
+[GitHub](https://github.com/) with:
+
+``` r
+## Install < remotes > package (if not already installed) ----
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
+
+## Install < weatheRcues > from GitHub ----
+remotes::install_github("ValentinJourne/weatheRcues")
+```
+
+Then you can attach the package `weatheRcues`:
+
+``` r
+library("weatheRcues")
+```
+
+## Get started
+
+For an overview of the main features of `weatheRcues`, please read the
+[Get
+started](https://ValentinJourne.github.io/weatheRcues/articles/weatheRcues.html)
+vignette.
+
+## Long-form documentations
+
+`weatheRcues` provides **{{ NUMBER OF VIGNETTES }}** vignettes to learn
+more about the package:
+
+- the [Get
+  started](https://ValentinJourne.github.io/weatheRcues/articles/weatheRcues.html)
+  vignette describes the core features of the package
+- **{{ LIST ADDITIONAL VIGNETTES }}**
+
+## Citation
+
+Please cite `weatheRcues` as:
+
+> Journé Valentin (2024) weatheRcues: An R package to **{{ TITLE }}**. R
+> package version 0.0.0.9000.
+> <https://github.com/ValentinJourne/weatheRcues/>
+
+## Contributing
+
+This code is mostly based on previous code, study, etc. Feel free to
+adjust the code as you want. In case you have any question, please
+contact us.
+
+## Acknowledgments
+
+We would like to thank Martijn van de Pol, and Adrian Roberts for the
+different methods they developed. We would also like Nicolas Casajus for
+useful information related to code implementation.
+
+## References
+
+**{{ To add }}**
