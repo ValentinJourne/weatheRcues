@@ -15,11 +15,12 @@ knitr::opts_chunk$set(collapse = TRUE,
 
 ```{r setup}
 library(weatheRcues)
+
 ```
 
 
-```{r generate data, include=FALSE}
-
+```{r generatedata, echo=FALSE, results='hide'}
+library(tidyverse)
 set.seed(123)  
 startyear = 1940
 years <- startyear:2020
@@ -56,7 +57,7 @@ seed_production_simulated <- june_week %>%
 
 ```
 
-```{r sliding window}
+```{r slidingwindow}
 head(seed_production_simulated)
 head(climate_data_simulated)
 
