@@ -164,7 +164,8 @@ runing_basic_cues = function(lag  = 100,
                              siteforsub = "longitude=-0.15_latitude=50.85",
                              climate_csv = climate_csv,
                              Results_CSPsub = Results_CSPsub,
-                             data = data){
+                             data = data,
+                             variablemoving = 'TMEAN'){
   
   #mostly similar strucutre to CSP methods 
   list_slope <- as.list(Results_CSPsub$estimate)
@@ -206,10 +207,10 @@ runing_basic_cues = function(lag  = 100,
   rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
                                       climate = climate_csv, 
                                       yearneed = yearneed, 
-                                      refday = 305, 
+                                      refday = refday, 
                                       lastdays = lastdays, 
                                       rollwin = 1, 
-                                      variablemoving = 'TMEAN')
+                                      variablemoving = variablemoving)
   
   output_fit_summary.temp.basic <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = data, 
                                                                                                  window_ranges_df = window_ranges_df,

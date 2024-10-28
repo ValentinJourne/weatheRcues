@@ -244,7 +244,8 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
                            refday = 305,
                            lastdays = max(range),
                            rollwin = 1,
-                           optim.k = F){
+                           optim.k = F,
+                           variablemoving = 'TMEAN'){
   
   
   list_slope <- as.list(Results_CSPsub$estimate)
@@ -288,7 +289,7 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
                                       refday = refday, 
                                       lastdays = lastdays, 
                                       rollwin = rollwin, 
-                                      variablemoving = 'TMEAN')
+                                      variablemoving = variablemoving)
   output_fit_summary.temp <- purrr::map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = data, 
                                                                                            window_ranges_df = window_ranges_df,
                                                                                            rolling.temperature.data = rolling.temperature.data,

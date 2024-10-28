@@ -1,0 +1,10 @@
+citHeader("To cite weatheRcues in publications use:")
+
+bibentry(
+  bibtype = "Manual",
+  title   = "What is the best method to identify weather cues in forest tree reproduction?",
+  author  = c(person("Journé Valentin")),
+  year    = "2024",
+  note    = "R package version 0.0.1",
+  url     = "https://github.com/ValentinJourne/weatheRcues"
+)

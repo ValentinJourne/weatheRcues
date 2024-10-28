@@ -115,7 +115,9 @@ climwin_site_days <- function(climate_data,
     sigma = sigma.model
   ) %>% 
     dplyr::rename(window.open = WindowOpen,
-                  window.close = WindowClose)
+                  window.close = WindowClose) %>% 
+    dplyr::mutate(window.open = window.open, #a checker, mais je crois que climwin start vector at 0, and me at 1, so maybe need to add +1 
+           window.close = window.close)
   
   return(statistics)
 }

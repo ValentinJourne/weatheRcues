@@ -250,8 +250,8 @@ goingbackpastdayscalendar <-function(refday = 274,
 #' }
 #'
 #' @return A data frame with two columns:
-#' \item{windowsclose}{The start day of each sequence.}
-#' \item{windowsopen}{The end day of each sequence.}
+#' \item{window.close}{The start day of each sequence.}
+#' \item{window.open}{The end day of each sequence.}
 #'
 #' @examples
 #' # Example usage of the save_window_ranges function
@@ -266,26 +266,26 @@ save_window_ranges <- function(sequences_days) {
   # Check the length of sequences_days
   if (length(sequences_days) == 1) {
     # If only one sequence, save it directly
-    windowsclose <- sequences_days[[1]][1]
-    windowsopen <- tail(sequences_days[[1]], n = 1)
+    window.close <- sequences_days[[1]][1]
+    window.open <- tail(sequences_days[[1]], n = 1)
     
     # Store the result in the list
-    window_ranges[[1]] <- c(windowsclose, windowsopen)
+    window_ranges[[1]] <- c(window.close, window.open)
   } else {
     # Loop through each sequence and save the windows
     for (p in 1:length(sequences_days)) {
-      windowsclose <- sequences_days[[p]][1]
-      windowsopen <- tail(sequences_days[[p]], n = 1)
+      window.close <- sequences_days[[p]][1]
+      window.open <- tail(sequences_days[[p]], n = 1)
       
       # Store the result in the list
-      window_ranges[[p]] <- c(windowsclose, windowsopen)
+      window_ranges[[p]] <- c(window.close, window.open)
     }
   }
   
   # Convert the list to a data frame for easier handling
   window_ranges_df <- do.call(rbind, lapply(window_ranges, function(x) {
-    data.frame(windowsclose = x[1], 
-               windowsopen = x[2])
+    data.frame(window.close = x[1], 
+               window.open = x[2])
   }))
   
   return(window_ranges_df)
@@ -435,7 +435,7 @@ extract_sequences_auto <- function(vec, tolerance) {
 #'
 #' @details
 #' The function:
-#' 1. Extracts the `windowsopen` and `windowsclose` values from the `window_ranges_df`
+#' 1. Extracts the `window.open` and `window.close` values from the `window_ranges_df`
 #'    for the specified index `z`.
 #' 2. Filters `rolling.temperature.data` to retrieve climate data within the window range.
 #' 3. Aggregates temperature data (mean temperature) for each combination of `LONGITUDE`, 
@@ -451,16 +451,22 @@ extract_sequences_auto <- function(vec, tolerance) {
 #' print(result)
 #'
 #' @export
-reruning_windows_modelling = function(z, tible.sitelevel = tible.sitelevel, window_ranges_df = window_ranges_df, rolling.temperature.data = rolling.temperature.data, myform.fin = formula('log.seed ~ mean.temperature'), refday = 305, rollwin = 1) {
+reruning_windows_modelling = function(z, 
+                                      tible.sitelevel = tible.sitelevel, 
+                                      window_ranges_df = window_ranges_df, 
+                                      rolling.temperature.data = rolling.temperature.data, 
+                                      myform.fin = formula('log.seed ~ mean.temperature'), 
+                                      refday = 305, 
+                                      rollwin = 1) {
   
   # Extract the window open and close for the current iteration
-  windowsopen <- window_ranges_df$windowsopen[z]
-  windowsclose <- window_ranges_df$windowsclose[z]
+  window.open <- window_ranges_df$window.open[z]
+  window.close <- window_ranges_df$window.close[z]
   window_number <- window_ranges_df$windows.sequences.number[z]
   
   # Filter the rolling temperature data according to the current window range
   climate_windows_best <- rolling.temperature.data %>%
-    filter(days.reversed <= windowsopen & days.reversed >= windowsclose) %>%
+    filter(days.reversed <= window.open & days.reversed >= window.close) %>%
     group_by(LONGITUDE, LATITUDE, year) %>%
     summarise(mean.temperature = mean(rolling_avg_tmean, na.rm = TRUE)) %>%
     ungroup() %>%
@@ -483,15 +489,16 @@ reruning_windows_modelling = function(z, tible.sitelevel = tible.sitelevel, wind
     reference.day = refday,
     windows.size = rollwin,
     #knots.number = results$k,
-    window.open = windowsopen,
-    window.close = windowsclose,
-    intercept = tidy_model$estimate[1],
-    intercept.se = tidy_model$std.error[1],
-    estimate = tidy_model$estimate[2],
-    estimate.se = tidy_model$std.error[2],
+    window.open = window.open,
+    window.close = window.close,
+    intercept.estimate = tidy_model$estimate[1],
+    intercept.std.error = tidy_model$std.error[1],
+    slope.estimate = tidy_model$estimate[2],
+    slope.std.error = tidy_model$std.error[2],
     pvalue = tidy_model$p.value[2],
     r2 = glance_model$r.squared,
     AIC = glance_model$AIC,
+    sigma = glance_model$sigma,
     nobs = glance_model$nobs,
     nsequence.id = z
   )
@@ -740,7 +747,8 @@ runing.movingwin.analysis = function(data = data,
 site.moving.climate.analysis <- function(bio_data, 
                                          climate.data, 
                                          lastdays, 
-                                         myform) {
+                                         myform,
+                                         refday) {
   # Define the year period
   yearneed <- 2
   yearperiod <- (min(climate.data$year) + yearneed):max(climate.data$year)
@@ -749,7 +757,7 @@ site.moving.climate.analysis <- function(bio_data,
   rolling.temperature.data <- purrr::map_dfr(yearperiod, reformat.climate.backtothepast, 
                                              climate = climate.data, 
                                              yearneed = yearneed, 
-                                             refday = 305, 
+                                             refday = refday, 
                                              lastdays = lastdays, 
                                              rollwin = 1, 
                                              variablemoving = 'TMEAN')
@@ -1028,4 +1036,46 @@ get.mean.sd = function(vector){
   o.mean = mean(vector)
   o.sd = sd(vector)
   c(o.mean,o.sd)
+}
+
+
+#' Create Non-Overlapping Data Blocks
+#' 
+#' This function divides a given dataset into a specified number of non-overlapping blocks. 
+#' Each block contains a contiguous subset of rows from the dataset. The number of rows in 
+#' each block is determined by the total number of rows divided by the number of blocks.
+#' 
+#' @param data A data frame or tibble to be divided into blocks. The data must be 
+#'              arranged such that the order of the rows reflects the desired 
+#'              sequential structure (e.g., time series data).
+#' @param num_blocks An integer specifying the number of non-overlapping blocks to create 
+#'                   from the dataset. Must be a positive integer.
+#' 
+#' @return A list containing the specified number of blocks, where each block is a 
+#'         data frame. If the specified number of blocks cannot be created from the 
+#'         dataset, an error is raised.
+#' 
+#' @examples
+#' # Example dataset
+#' example_data <- data.frame(year = 2000:2029, value = rnorm(30))
+#' 
+#' # Create 5 non-overlapping blocks from the dataset
+#' blocks <- create_blocks(example_data, num_blocks = 5)
+#' 
+#' @export
+create_blocks <- function(data, num_blocks) {
+  n <- nrow(data)
+  block_size <- n %/% num_blocks  # Calculate rows per block
+  blocks <- list()
+  
+  for (i in seq(1, n, by = block_size)) {
+    blocks[[length(blocks) + 1]] <- data[i:min(i + block_size - 1, n), ]
+  }
+  
+  # Ensure we only return the specified number of blocks
+  if (length(blocks) < num_blocks) {
+    stop("Not enough data to create the specified number of blocks.")
+  }
+  
+  return(blocks[1:num_blocks])  # Return only the requested number of blocks
 }
