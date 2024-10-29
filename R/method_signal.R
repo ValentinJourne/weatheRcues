@@ -165,7 +165,8 @@ runing_basic_cues = function(lag  = 100,
                              climate_csv = climate_csv,
                              Results_CSPsub = Results_CSPsub,
                              data = data,
-                             variablemoving = 'TMEAN'){
+                             variablemoving = 'TMEAN',
+                             yearneed = 2){
   
   #mostly similar strucutre to CSP methods 
   list_slope <- as.list(Results_CSPsub$estimate)
@@ -200,13 +201,13 @@ runing_basic_cues = function(lag  = 100,
   window_ranges_df <- save_window_ranges(sequences_days) %>% 
     mutate(windows.sequences.number = 1:nrow(.))
   
-  yearneed <- 2
+  yearneed <- yearneed#2
   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
   
   # Apply the function across all years in yearperiod and combine results
   rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
                                       climate = climate_csv, 
-                                      yearneed = yearneed, 
+                                      yearneed, 
                                       refday = refday, 
                                       lastdays = lastdays, 
                                       rollwin = 1, 
@@ -215,7 +216,8 @@ runing_basic_cues = function(lag  = 100,
   output_fit_summary.temp.basic <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = data, 
                                                                                                  window_ranges_df = window_ranges_df,
                                                                                                  rolling.temperature.data = rolling.temperature.data,
-                                                                                                 myform.fin = formula('log.seed ~ mean.temperature')))
+                                                                                                 myform.fin = formula('log.seed ~ mean.temperature'),
+                                                                                                 yearneed))
   
   
 }

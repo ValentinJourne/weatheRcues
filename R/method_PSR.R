@@ -56,12 +56,24 @@ runing_psr_site = function(bio_data = bio_data,
                            matrice = c(3,1),
                            knots = NULL,
                            tolerancedays = 7,
-                           plot = TRUE){
+                           plot = TRUE,
+                           yearneed = 2){
   
   #just checking 
   if((site == unique(bio_data$plotname.lon.lat))==F){
     stop()
   }
+  for (col in colnames(bio_data)) {
+    if (col == "Year") {
+      colnames(bio_data)[colnames(bio_data) == "Year"] <- "year"
+    }
+  }
+  for (col in colnames(climate_csv)) {
+    if (col == "Year") {
+      colnames(climate_csv)[colnames(climate_csv) == "Year"] <- "year"
+    }
+  }
+  
   
   #now psr method, based from Simmonds et al
   # need climate data to be arranged with year as row
@@ -70,12 +82,12 @@ runing_psr_site = function(bio_data = bio_data,
   tempmat <- climate2 %>% spread(, key = yday, value = temp)
   tempmat <- tempmat[,-1]
   #number years monitoring seeds 
-  ny<-length(bio_data$Year)
+  ny<-length(bio_data$year)
   nt<-tot_days-1
   ## Formatting data
   index.matrix=matrix(1:nt,ny,nt,byrow=TRUE)
   # Define the year period
-  yearneed <- 2
+  yearneed <- yearneed
   #will fiter the year period here to the year needeed 
   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
   # Apply the function across all years in yearperiod and combine results
@@ -88,9 +100,9 @@ runing_psr_site = function(bio_data = bio_data,
                                       variablemoving = covariates.of.interest)
   #merge data seed to moving climate
   tible.sitelevel = bio_data %>% #site = bio_data 
-    rename(year = Year) %>% 
+    #rename(year = Year) %>% 
     left_join(rolling.temperature.data) %>% 
-    drop_na(!!sym('rolling_avg_tmean'))
+    tidyr::drop_na(!!sym('rolling_avg_tmean'))
   
   climate2 <- data.frame(year = tible.sitelevel$year, 
                          yday = tible.sitelevel$days.reversed, 
@@ -149,7 +161,8 @@ runing_psr_site = function(bio_data = bio_data,
     output_fit_summary.psr.temp <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = bio_data, 
                                                                                                  window_ranges_df = window_ranges_df,
                                                                                                  rolling.temperature.data = rolling.temperature.data,
-                                                                                                 myform.fin = formula('log.seed ~ mean.temperature')))
+                                                                                                 myform.fin = formula('log.seed ~ mean.temperature'),
+                                                                                                 yearneed = yearneed))
     
   }
   return(output_fit_summary.psr.temp)

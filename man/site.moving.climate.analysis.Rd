@@ -4,7 +4,14 @@
 \alias{site.moving.climate.analysis}
 \title{Perform Moving Window Analysis for a Specific Site}
 \usage{
-site.moving.climate.analysis(bio_data, climate.data, lastdays, myform)
+site.moving.climate.analysis(
+  bio_data,
+  climate.data,
+  lastdays,
+  myform,
+  refday = 305,
+  yearneed = 2
+)
 }
 \arguments{
 \item{lastdays}{An integer specifying the number of days to consider in the rolling window analysis.}

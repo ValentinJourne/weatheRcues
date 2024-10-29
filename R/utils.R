@@ -215,10 +215,10 @@ goingbackpastdayscalendar <-function(refday = 274,
     yearsref = yearperiod[k]
     yearrefminusOne <- yearsref-yearback
     tt <- dfata %>% 
-      filter(YEAR <= yearsref & YEAR >= yearrefminusOne) %>% 
-      mutate(referenceFin = ifelse(YEAR == yearsref & DOY == refday, 1,
+      dplyr::filter(YEAR <= yearsref & YEAR >= yearrefminusOne) %>% 
+      dplyr::mutate(referenceFin = ifelse(YEAR == yearsref & DOY == refday, 1,
                                    ifelse(YEAR == yearsref & DOY > refday, NA, 0))) %>% 
-      filter(!is.na(referenceFin)) %>% 
+      dplyr::filter(!is.na(referenceFin)) %>% 
       as.data.frame()
     #create sequence going back 365 month before 
     seqDays <- seq(1,nrow(tt),1)
@@ -459,6 +459,7 @@ reruning_windows_modelling = function(z,
                                       refday = 305, 
                                       rollwin = 1) {
   
+  
   # Extract the window open and close for the current iteration
   window.open <- window_ranges_df$window.open[z]
   window.close <- window_ranges_df$window.close[z]
@@ -466,16 +467,22 @@ reruning_windows_modelling = function(z,
   
   # Filter the rolling temperature data according to the current window range
   climate_windows_best <- rolling.temperature.data %>%
-    filter(days.reversed <= window.open & days.reversed >= window.close) %>%
-    group_by(LONGITUDE, LATITUDE, year) %>%
-    summarise(mean.temperature = mean(rolling_avg_tmean, na.rm = TRUE)) %>%
-    ungroup() %>%
-    mutate(window_number = window_number)  # Add the window number for identification
+    dplyr::filter(days.reversed <= window.open & days.reversed >= window.close) %>%
+    dplyr::group_by(LONGITUDE, LATITUDE, year) %>%
+    dplyr::summarise(mean.temperature = mean(rolling_avg_tmean, na.rm = TRUE)) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(window_number = window_number)  # Add the window number for identification
+  
+  for (col in colnames(tible.sitelevel)) {
+    if (col == "Year") {
+      colnames(tible.sitelevel)[colnames(tible.sitelevel) == "Year"] <- "year"
+    }
+  }
   
   # Merge temperature data with the site-level data and fit the model
   fit.best.model <- tible.sitelevel %>%
-    mutate(year = Year) %>%
-    left_join(climate_windows_best, by = "year") %>%
+    #mutate(year = Year) %>%
+    dplyr::left_join(climate_windows_best, by = "year") %>%
     lm(myform.fin, data = .)
   
   # Extract model coefficients and statistics
@@ -560,11 +567,11 @@ reformat.climate.backtothepast <- function(yearsref = 2000,
                                            rollwin = 1, 
                                            variablemoving = 'temperature.degree') {
   # Print parameter values - to see if no shit 
-  print(paste("rollwin - size window:", rollwin))
-  print(paste("refday - reference day:", refday))
-  print(paste("lastdays - last day:", lastdays))
-  print(paste("variablemoving - variable to move:", variablemoving))
-  print(paste("yearneed - adjust to maturation fruit time :", yearneed, 'years'))
+  #print(paste("rollwin - size window:", rollwin))
+  #print(paste("refday - reference day:", refday))
+  #print(paste("lastdays - last day:", lastdays))
+  #print(paste("variablemoving - variable to move:", variablemoving))
+  #print(paste("yearneed - adjust to maturation fruit time :", yearneed, 'years'))
   
   if (!variablemoving %in% names(climate)) {
     warning(paste("Warning: Column", variablemoving, "not found in the dataset."))
@@ -578,9 +585,9 @@ reformat.climate.backtothepast <- function(yearsref = 2000,
   
   yearrefminusOne <- yearsref - yearneed
   tt <- climate %>%
-    filter(year <= yearsref & year >= yearrefminusOne) %>%
-    mutate(referenceFin = ifelse(year == yearsref & yday == refday, 1, ifelse(year == yearsref & yday > refday, NA, 0))) %>%
-    filter(!is.na(referenceFin)) %>%
+    dplyr::filter(year <= yearsref & year >= yearrefminusOne) %>%
+    dplyr::mutate(referenceFin = ifelse(year == yearsref & yday == refday, 1, ifelse(year == yearsref & yday > refday, NA, 0))) %>%
+    dplyr::filter(!is.na(referenceFin)) %>%
     as.data.frame()
   
   # Create sequence going back lastdays days before the reference day
@@ -588,14 +595,14 @@ reformat.climate.backtothepast <- function(yearsref = 2000,
   newsequance <- rep(seqDays)
   
   ttup <- tt %>%
-    mutate(days.reversed = rev(newsequance)) %>%
-    filter(days.reversed < lastdays)
+    dplyr::mutate(days.reversed = rev(newsequance)) %>%
+    dplyr::filter(days.reversed < lastdays)
   
   #use !!sym; convert a string, here my variable name, to a symbol
   ttupfin <- ttup %>%
-    arrange(days.reversed) %>%
-    mutate(rolling_avg_tmean = zoo::rollmeanr(!!sym(variablemoving), k = rollwin, fill = NA, align = 'right')) %>%
-    mutate(year = max(year)) %>%
+    dplyr::arrange(days.reversed) %>%
+    dplyr::mutate(rolling_avg_tmean = zoo::rollmeanr(!!sym(variablemoving), k = rollwin, fill = NA, align = 'right')) %>%
+    dplyr::mutate(year = max(year)) %>%
     dplyr::select(LONGITUDE, LATITUDE, year, date, yday, days.reversed, rolling_avg_tmean)
   
   return(ttupfin)
@@ -656,23 +663,29 @@ runing.movingwin.analysis = function(data = data,
                                      covariates.of.interest = 'rolling_avg_tmean',
                                      myform = formula('log.seed~rolling_avg_tmean')){
   
+  for (col in colnames(data)) {
+    if (col == "Year") {
+      colnames(data)[colnames(data) == "Year"] <- "year"
+    }
+  }
+  
   #merge data seed to moving climate
   tible.sitelevel = data %>% #site = bio_data 
-    rename(year = Year) %>% 
-    left_join(rolling.temperature.data) %>% 
-    drop_na(!!sym(covariates.of.interest))
+    #rename(year = Year) %>% 
+    dplyr::left_join(rolling.temperature.data) %>% 
+    tidyr::drop_na(!!sym(covariates.of.interest))
   
   #define correlation - calculate correlation and se, extract also p value 
   n = tible.sitelevel %>% dplyr::select(year, sitenewname) %>% distinct() %>% nrow()
   
   correlation.all <- tible.sitelevel %>% 
-    nest(data = -days.reversed) %>%
-    mutate(correlation = purrr::map(data, ~cor.test(y=.$log.seed, x=.[[covariates.of.interest]], method = method)$estimate)) %>% 
-    mutate(pvalue.cor = purrr::map(data, ~cor.test(y=.$log.seed, x=.[[covariates.of.interest]], method = method)$p.value))
+    tidyr::nest(data = -days.reversed) %>%
+    dplyr::mutate(correlation = purrr::map(data, ~cor.test(y=.$log.seed, x=.[[covariates.of.interest]], method = method)$estimate)) %>% 
+    dplyr::mutate(pvalue.cor = purrr::map(data, ~cor.test(y=.$log.seed, x=.[[covariates.of.interest]], method = method)$p.value))
   
   
   cortemp = correlation.all %>% 
-    unnest(c(correlation, pvalue.cor)) %>% 
+    tidyr::unnest(c(correlation, pvalue.cor)) %>% 
     dplyr::select(days.reversed, correlation, pvalue.cor) %>% 
     dplyr::mutate(correlation.se = correlation.spearman.se(.$correlation, n)) %>% 
     dplyr::mutate(sitenewname = unique(tible.sitelevel$sitenewname))
@@ -687,14 +700,14 @@ runing.movingwin.analysis = function(data = data,
            augmented = purrr::map(model, broom::augment))
   
   slope = fitted_models %>%
-    unnest(tidied) %>% 
+    tidyr::unnest(tidied) %>% 
     dplyr::filter(str_detect(term, as.character(myform)[3])) %>% 
     dplyr::select(days.reversed,term, estimate, std.error, p.value) %>% 
     dplyr::mutate(sitenewname  = unique(tible.sitelevel$sitenewname)) %>% 
     dplyr::left_join(fitted_models %>%
-                unnest(glanced) %>% 
+                tidyr::unnest(glanced) %>% 
                 dplyr::select(days.reversed,r.squared, logLik) %>% 
-                mutate(sitenewname  = unique(tible.sitelevel$sitenewname),
+                  dplyr::mutate(sitenewname  = unique(tible.sitelevel$sitenewname),
                        plotname.lon.lat = unique(tible.sitelevel$plotname.lon.lat))) %>% 
     dplyr::select(sitenewname, plotname.lon.lat, days.reversed, everything()) %>% 
     dplyr::left_join(cortemp)
@@ -748,9 +761,10 @@ site.moving.climate.analysis <- function(bio_data,
                                          climate.data, 
                                          lastdays, 
                                          myform,
-                                         refday) {
+                                         refday = 305,
+                                         yearneed = 2) {
   # Define the year period
-  yearneed <- 2
+  #yearneed <- 2
   yearperiod <- (min(climate.data$year) + yearneed):max(climate.data$year)
   
   # Apply the function across all years in yearperiod and combine results
@@ -821,7 +835,7 @@ FULL.moving.climate.analysis <- function(seed.data.all = seed.data.all,
     
     # Filter biological data for the current site
     bio_data <- seed.data.all %>%
-      filter(sitenewname == site.name) %>%
+      dplyr::filter(sitenewname == site.name) %>%
       as.data.frame() 
     
     # format climate

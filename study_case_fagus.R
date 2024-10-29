@@ -717,7 +717,7 @@ cowplot::save_plot(here("figures/Figure.block.png"),block.cross.figure, ncol = 1
 ##############################################################################
 #######################
 #now test the frac dataset 
-#take more than 10 hours if 10 simulations (climwin takes some times)
+#take more than 10 hours if 10 iteration (climwin takes some times)
 # Initialize a list to store all results
 result_list_all <- list()
 
@@ -831,25 +831,28 @@ library(lubridate)
 
 # Simulate climate data: assume daily data for 20 years
 set.seed(123)  
-startyear = 1940
+startyear = 1980
 years <- startyear:2020
-days_per_year <- 365
+yday <- 365
 climate_data_simulated <- data.frame(
-  date = seq.Date(from = as.Date(paste0(startyear,"-01-01")), by = "day", length.out = length(years) * days_per_year),
-  temp = runif(length(years) * days_per_year, min = 10, max = 30)  # random temperatures
+  date = seq.Date(from = as.Date(paste0(startyear,"-01-01")), by = "day", length.out = length(years) * yday),
+  temp = runif(length(years) * yday, min = 10, max = 30)  # random temperatures
 )
   
 climate_data_simulated <- climate_data_simulated %>%
   mutate(year = format(date, "%Y"),
-         day_of_year = yday(date),
-         year = as.numeric(year)) %>%
+         yday = yday(date),
+         year = as.numeric(year),
+         LONGITUDE = NA, LATITUDE = NA) %>%
   mutate(across(c(temp), scale)) %>%
-  mutate(across(c(temp), as.vector))
+  mutate(across(c(temp), as.vector)) %>% 
+  rename(TMEAN = temp)
+
+#qs::qsave(climate_data_simulated, here::here('outputs/climate_data_simulated.qs'))
 
 # Select ~ one week in June 
 june_week <- climate_data_simulated %>%
-  filter(day_of_year >= 150 & day_of_year <= 160)
-
+  filter(yday >= 150 & yday <= 160)
 
 raw.data.param.alpha = statistics_absolute_climwin$intercept.estimate
 raw.data.param.beta = statistics_absolute_climwin$slope.estimate
@@ -858,225 +861,282 @@ raw.data.param.sigma = statistics_absolute_climwin$sigma
 
 #generate parameter range values for the simulation
 setup.param = parameter.range(raw.data.param.alpha,
-                           raw.data.param.beta,
-                           raw.data.param.sigma,
-                           option = 'min.max')
+                              raw.data.param.beta,
+                              raw.data.param.sigma,
+                              option = 'min.max')
+
+# Container to store results
+results_list_fakedata = simulated_fake_bio_data(fakeclimatewindow = june_week,
+                                                setup.param = setup.param, 
+                                   num_simulations = 1000, 
+                                   save_fake_data = TRUE,
+                                   overwrite=FALSE)
+
   
-
-alpha.random.value = runif(1, min = setup.param$alpha[1], max = setup.param$alpha[2])
-beta.random.value = runif(1, min = setup.param$beta[1], max = setup.param$beta[2])
-sigma.random.value = runif(1, min = setup.param$sigma[1], max = setup.param$sigma[2])
-
-
-
-seed_production_simulated <- june_week %>%
-  group_by(year) %>%
-  summarise(mean_temp_june_week = mean(temp)) %>%
-  # Standardize the mean temperature for proper correlation, as in the main analysis
-  mutate(mean_temp_scaled = scale(mean_temp_june_week, center = TRUE, scale = TRUE)) %>%
-  # Generate log.seed with controlled correlation
-  mutate(log.seed = alpha.random.value + beta.random.value * mean_temp_scaled + rnorm(n(), mean = 0, sd = sigma.random.value))%>%
-  filter(year > startyear)%>% #to select one year less 
-  mutate(year = as.numeric(as.character(year))) %>% 
-  mutate(Date = paste0( "15/06/",year)) %>% #need a date, even if absolute window
-  mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y")) %>% #make it as in the climate date
-  sample_frac(sample.fraction)  
-
-reg.summary.simulation = summary(lm(log.seed~mean_temp_june_week, data = seed_production_simulated))
-r2sim.before.climwin = reg.summary.simulation$adj.r.squared
-
-simulation.cimwin = climwin::slidingwin(
-  xvar = list(temperature.degree = climate_data_simulated$temp),
-  cdate = climate_data_simulated$date,
-  bdate = seed_production_simulated$Date2,
-  baseline = lm(log.seed~1, data = seed_production_simulated),#i Needed to specify the formula here, if not it is not working properly
-  cinterval = 'day',
-  range = c(600, 0),
-  refday = c(01, 11),
-  type = 'absolute',
-  stat = "mean",
-  cmissing = 'method2',
-  func = "lin"
-)
-
-generate 1000 datasets
-then run simulation for the different methods 
-
-object.result = bind_cols(simulation.cimwin$combos,
-          r2.before.climwin = r2sim.before.climwin,
-          alpha.random.value.setup = alpha.random.value,
-          beta.random.value.setup = beta.random.value,
-          sigma.random.value.setup = sigma.random.value)
-
-
-simulate_seed_production <- function(setup.param, 
-                                     june_week, 
-                                     climate_data_simulated, 
-                                     startyear, 
-                                     sample.fraction = 1, 
-                                     num_simulations = 10) {
+#simulation40years1000sim = simulation_runing_window(climate_data_simulated,
+#                                    results_list_fakedata)
   
-  # Container to store results
-  results_list <- vector("list", num_simulations)
+simulation_runing_window = function(climate_data_simulated,
+                                    results_list_fakedata){
   
-  for (i in seq_len(num_simulations)) {
+  print(paste0("number of simulation:", length(results_list_fakedata)))
+  if(length(results_list_fakedata)>10 & length(results_list_fakedata)<100){
+    print(paste0("It might take few hours"))
+  }
+  if(length(results_list_fakedata)>100){
+    print(paste0("It might take some days (because I've made a basic for loop)"))
+  }
+        
+  fin.sim = NULL
+  for(k in 1:length(results_list_fakedata)){
+    #climwin 
+    # statistics_climwin_method.simulated = climwin_site_days(
+    #   climate_data = climate_data_simulated,
+    #   data = results_list_fakedata[[k]],  
+    #   site.name = as.character(k),  
+    #   range = c(365, 0),
+    #   cinterval = 'day',
+    #   refday = c(01, 11),  
+    #   optionwindows = 'absolute',  
+    #   climate_var = 'TMEAN'  
+    # ) %>% 
+    #   dplyr::mutate(method = 'climwin',
+    #                 r2 = R2)
     
-    # Randomly sample alpha, beta, and sigma from the provided ranges to the uniform
-    alpha.random.value <- runif(1, min = setup.param$alpha[1], max = setup.param$alpha[2])
-    beta.random.value <- runif(1, min = setup.param$beta[1], max = setup.param$beta[2])
-    sigma.random.value <- runif(1, min = setup.param$sigma[1], max = setup.param$sigma[2])
+    #create object for csp and basic methods
+    run.sim.day.res = site.moving.climate.analysis(bio_data = as.data.frame(results_list_fakedata[[k]]), 
+                                                   climate.data= climate_data_simulated, 
+                                                   lastdays = 365, 
+                                                   formula('log.seed ~ rolling_avg_tmean'),
+                                                   refday = 305,
+                                                   yearneed = 1) 
     
-    # Simulate seed production, need same june week data, coming from the same climate data simulated
-    seed_production_simulated <- june_week %>%
-      group_by(year) %>%
-      summarise(mean_temp_june_week = mean(temp)) %>%
-      # Standardize the mean temperature for proper correlation, as in the main analysis
-      mutate(mean_temp_scaled = scale(mean_temp_june_week, center = TRUE, scale = TRUE)) %>%
-      # Generate log.seed with controlled correlation
-      mutate(log.seed = alpha.random.value + beta.random.value * mean_temp_scaled + 
-               rnorm(n(), mean = 0, sd = sigma.random.value)) %>%
-      filter(year > startyear) %>%
-      mutate(year = as.numeric(as.character(year))) %>%
-      mutate(Date = paste0("15/06/", year)) %>%
-      mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y")) %>%
-      sample_frac(sample.fraction)  
+    statistics_csp_method.simulated =runing_csp_site(Results_CSPsub = run.sim.day.res,
+                                                     data = as.data.frame(results_list_fakedata[[k]]),
+                                                     siteneame.forsub = as.character(k),
+                                                     option.check.name = TRUE,
+                                                     climate_csv = climate_data_simulated,
+                                                     refday = 305,
+                                                     lastdays = 365,
+                                                     rollwin = 1,
+                                                     optim.k = F,
+                                                     variablemoving = 'TMEAN',
+                                                     yearneed = 1) %>% 
+      slice(which.max(r2))%>% 
+      dplyr::mutate(method = 'csp')
     
-    # Run regression to get R^2 before climwin
-    reg.summary.simulation <- summary(lm(log.seed ~ mean_temp_june_week, data = seed_production_simulated))
-    r2sim.before.climwin <- reg.summary.simulation$adj.r.squared
+    statistics_basic_method.simulated <- runing_basic_cues(lag = 100,
+                                                           threshold = 3,
+                                                           influence = 0,
+                                                           tolerancedays = 7,
+                                                           refday = 305,
+                                                           lastdays = 365,
+                                                           rollwin = 1,
+                                                           siteforsub = as.character(k),
+                                                           climate_csv = climate_data_simulated,
+                                                           Results_CSPsub = run.sim.day.res,
+                                                           data = results_list_fakedata[[k]],
+                                                           yearneed = 1) %>% 
+      dplyr::slice(which.max(r2)) %>% 
+      dplyr::mutate(method = 'signal')
     
-    # Perform climwin analysis
-    simulation.climwin <- climwin::slidingwin(
-      xvar = list(temperature.degree = climate_data_simulated$temp),
-      cdate = climate_data_simulated$date,
-      bdate = seed_production_simulated$Date2,
-      baseline = lm(log.seed ~ 1, data = seed_production_simulated),
-      cinterval = 'day',
-      range = c(600, 0), #here I used the same as we used in the ms 
-      refday = c(01, 11), #main text 
-      type = 'absolute',
-      stat = "mean",
-      cmissing = 'method2',
-      func = "lin"
-    )
+    statistics_psr_method.simulated <- runing_psr_site(bio_data = results_list_fakedata[[k]],
+                                                       site =as.character(k),
+                                                       climate_csv = climate_data_simulated,
+                                                       tot_days = 365,
+                                                       refday = 305,
+                                                       rollwin = 1,
+                                                       covariates.of.interest = 'TMEAN',
+                                                       matrice = c(3, 1),
+                                                       knots = NULL,
+                                                       tolerancedays = 7,
+                                                       plot = TRUE,
+                                                       yearneed = 1) %>% 
+      dplyr::slice(which.max(r2)) %>% 
+      dplyr::mutate(method = 'psr')
     
-    # Bind results and store them
-    result <- bind_cols(simulation.climwin$combos,
-                        r2.before.climwin = r2sim.before.climwin,
-                        alpha.random.value.setup = alpha.random.value,
-                        beta.random.value.setup = beta.random.value,
-                        sigma.random.value.setup = sigma.random.value)
+    #extract just column of interest and previous parameters 
+    fin.sim.temp = bind_rows(#statistics_climwin_method.simulated,
+                             statistics_csp_method.simulated,
+                             statistics_basic_method.simulated,
+                             statistics_psr_method.simulated
+    ) %>% 
+      dplyr::select(sitenewname,
+                    reference.day,
+                    method,
+                    window.open,
+                    window.close,
+                    slope.estimate,
+                    intercept.estimate,
+                    AIC,
+                    r2) %>% 
+      dplyr::mutate(r2.before.simulate = base::unique(results_list_fakedata[[k]]$r2.before.climwin),
+                    alpha.random.value.setup = base::unique(results_list_fakedata[[k]]$alpha.random.value.setup),
+                    beta.random.value.setup = base::unique(results_list_fakedata[[k]]$beta.random.value.setup),
+                    sigma.random.value.setup = base::unique(results_list_fakedata[[k]]$sigma.random.value.setup),
+                    nb.year.biosimulate = nrow(results_list_fakedata[[k]])) %>% 
+      dplyr::rename(simulation = sitenewname)
     
-    results_list[[i]] <- result
+    fin.sim = rbind(fin.sim, fin.sim.temp)
+    
+  }
+  return(fin.sim)
+  
+}
+
+
+# Load required libraries
+simulation40years1000sim = simulation_runing_window(climate_data_simulated,
+                                                    results_list_fakedata = results_list_fakedata[c(1:2)])
+
+# Define the function with parallel processing
+simulation_runing_window_parallel <- function(climate_data_simulated = climate_data_simulated, 
+                                              results_list_fakedata = results_list_fakedata) {
+  
+  library(doParallel)
+  library(foreach)
+  print(paste0("Number of simulations: ", length(results_list_fakedata)))
+  if (length(results_list_fakedata) > 10 & length(results_list_fakedata) < 100) {
+    print("It might take a few hours.")
+  }
+  if (length(results_list_fakedata) > 100) {
+    print("It might take some days (considering this is parallelized).")
   }
   
-  # Combine all results into a single dataframe
-  final_results <- bind_rows(results_list)
+  # Set up parallel backend
+  num_cores <- parallel::detectCores() - 3 #just to avoid too much memory :(
+  cl <- parallel::makeCluster(num_cores)
+  doParallel::registerDoParallel(cl)
   
-  return(final_results)
+  # Use foreach for parallel processing
+  #needed to add all function and everything ... 
+  fin.sim <- foreach::foreach(k = 1:length(results_list_fakedata), 
+                     .combine = rbind,
+                     .packages = c("weatheRcues", 'tidyverse'),#export all the new functions :') and the obect
+                     .export = c("site.moving.climate.analysis", "runing_csp_site", 
+                                 "runing_basic_cues", "runing_psr_site", 
+                                 'reformat.climate.backtothepast', 'runing.movingwin.analysis', 
+                                 'correlation.spearman.se', "optimize_and_fit_gam",
+                                 'get_predictions_windows', 'extract_consecutive_sequences',
+                                 'save_window_ranges', "find_concurrent_period", 
+                                 "ThresholdingAlgo", "replace_0", ls(globalenv()) #just use environment .. because some parameters included in env
+                                 )) %dopar% {
+    
+    library(tidyverse)
+    library(weatheRcues)                
+    # climwin method
+    statistics_climwin_method.simulated <- climwin_site_days(
+      climate_data = climate_data_simulated,
+      data = results_list_fakedata[[k]],
+      site.name = as.character(k),
+      range = c(365, 0),
+      cinterval = 'day',
+      refday = c(1, 11),
+      optionwindows = 'absolute',
+      climate_var = 'TMEAN'
+    ) %>%
+      dplyr::mutate(method = 'climwin', r2 = R2)
+    
+    # csp and basic methods
+    run.sim.day.res <- site.moving.climate.analysis(
+      bio_data = results_list_fakedata[[k]], 
+      climate.data = climate_data_simulated, 
+      lastdays = 365, 
+      formula('log.seed ~ rolling_avg_tmean'),
+      refday = 305,
+      yearneed = 1
+    )
+    
+    statistics_csp_method.simulated <- runing_csp_site(
+      Results_CSPsub = run.sim.day.res,
+      data = results_list_fakedata[[k]],
+      siteneame.forsub = as.character(k),
+      option.check.name = TRUE,
+      climate_csv = climate_data_simulated,
+      refday = 305,
+      lastdays = 365,
+      rollwin = 1,
+      optim.k = F,
+      variablemoving = 'TMEAN',
+      yearneed = 1
+    ) %>% 
+      dplyr::slice(which.max(r2)) %>% 
+      dplyr::mutate(method = 'csp')
+    
+    statistics_basic_method.simulated <- runing_basic_cues(
+      lag = 100,
+      threshold = 3,
+      influence = 0,
+      tolerancedays = 7,
+      refday = 305,
+      lastdays = 365,
+      rollwin = 1,
+      siteforsub = as.character(k),
+      climate_csv = climate_data_simulated,
+      Results_CSPsub = run.sim.day.res,
+      data = results_list_fakedata[[k]],
+      yearneed = 1
+    ) %>% 
+      dplyr::slice(which.max(r2)) %>% 
+      dplyr::mutate(method = 'signal')
+    
+    #psr method
+    statistics_psr_method.simulated <- runing_psr_site(
+      bio_data = results_list_fakedata[[k]],
+      site = as.character(k),
+      climate_csv = climate_data_simulated,
+      tot_days = 365,
+      refday = 305,
+      rollwin = 1,
+      covariates.of.interest = 'TMEAN',
+      matrice = c(3, 1),
+      knots = NULL,
+      tolerancedays = 7,
+      plot = TRUE,
+      yearneed = 1
+    ) %>%
+      dplyr::slice(which.max(r2)) %>%
+      dplyr::mutate(method = 'psr')
+    
+    # Combine results into a temporary dataframe
+    fin.sim.temp <- dplyr::bind_rows(
+      statistics_climwin_method.simulated,
+      statistics_csp_method.simulated,
+      statistics_basic_method.simulated,
+      statistics_psr_method.simulated
+    ) %>% 
+      dplyr::select(sitenewname, reference.day, method, window.open, window.close, slope.estimate,
+                    intercept.estimate, AIC, r2) %>% 
+      dplyr::mutate(
+        r2.before.simulate = unique(results_list_fakedata[[k]]$r2.before.climwin),
+        alpha.random.value.setup = unique(results_list_fakedata[[k]]$alpha.random.value.setup),
+        beta.random.value.setup = unique(results_list_fakedata[[k]]$beta.random.value.setup),
+        sigma.random.value.setup = unique(results_list_fakedata[[k]]$sigma.random.value.setup),
+        nb.year.biosimulate = nrow(results_list_fakedata[[k]]),
+        simulation = as.character(k)
+      )
+    
+    fin.sim.temp  
+  }
+  
+  # Stop parallel processing
+  parallel::stopCluster(cl)
+  return(fin.sim)
 }
 
+#you might have warning on your computer, if you are runing > 100 sim 
+#started at 1.30pm
+#finished 3.45pm ! YOUHOU
+#you might have several warning in your session 
+result_simulations = simulation_runing_window_parallel(climate_data_simulated, 
+                                                       results_list_fakedata)
 
-simulation1 = simulate_seed_production(setup.param, 
-                                     june_week, 
-                                     climate_data_simulated, 
-                                     startyear, 
-                                     sample.fraction = 1, 
-                                     num_simulations = 10) 
-simulation2 = simulate_seed_production(setup.param, 
-                                       june_week, 
-                                       climate_data_simulated, 
-                                       startyear, 
-                                       sample.fraction = 1, 
-                                       num_simulations = 100) 
-simulation3 = simulate_seed_production(setup.param, 
-                                       june_week, 
-                                       climate_data_simulated, 
-                                       startyear, 
-                                       sample.fraction = 1, 
-                                       num_simulations = 100) 
-simulation4 = simulate_seed_production(setup.param, 
-                                       june_week, 
-                                       climate_data_simulated, 
-                                       startyear, 
-                                       sample.fraction = 1, 
-                                       num_simulations = 100) 
+#qs::qsave(result_simulations, here('outputs/result_simulations.qs'))
 
-simulation5 = simulate_seed_production(setup.param, 
-                                       june_week, 
-                                       climate_data_simulated, 
-                                       startyear, 
-                                       sample.fraction = 1, 
-                                       num_simulations = 100) 
-
-
-
-
-
-simulation6 = simulate_seed_production(setup.param, 
-                                       june_week, 
-                                       climate_data_simulated, 
-                                       startyear, 
-                                       sample.fraction = 1, 
-                                       num_simulations = 100) 
-simulation7 = simulate_seed_production(setup.param, 
-                                       june_week, 
-                                       climate_data_simulated, 
-                                       startyear, 
-                                       sample.fraction = 1, 
-                                       num_simulations = 100) 
-
-simulation.all = bind_rows(simulation1, simulation2, simulation3, 
-          simulation4, simulation5, simulation6,
-          simulation7)
-
-simulation.all %>% 
-summarise(wind.open_median = median(WindowOpen, na.rm = TRUE),
-          wind.close_median = median(WindowClose, na.rm = TRUE),
-          wind.close_q25 = quantile(WindowClose, 0.25, na.rm = TRUE),
-          wind.close_q75 = quantile(WindowClose, 0.75, na.rm = TRUE),
-          wind.open_q25 = quantile(WindowOpen, 0.25, na.rm = TRUE),
-          wind.open_q75 = quantile(WindowOpen, 0.75, na.rm = TRUE)) %>% 
-  dplyr::select(wind.open_median:wind.open_q75) %>% 
-  pivot_longer(starts_with('wind'), names_to = 'typewind') %>% 
-  separate_wider_delim(typewind, delim = '_', names=c('windows.type', 'metric')) %>% 
-  pivot_wider(names_from = 'metric', values_from = value) %>% 
-  left_join(calendar.climwin %>% mutate(median = days.reversed))
-
-hist(simulation.all$r2.before.climwin)
-quantile(simulation.all$r2.before.climwin, 0.75, na.rm = TRUE)
-quantile(simulation.all$r2.before.climwin, 0.25, na.rm = TRUE)
-
-#find when correct value 
-perfectwin = simulation.all %>% filter(between( WindowOpen, 150, 160),
-                                       between( WindowClose, 140, 150))
-summary(perfectwin$r2.before.climwin)
-
-
-seq.sim = seq(0.3,0.9,0.1)
-test.simulation.results = NULL
-for(i in 1:length(seq.sim)){
-  simulation1 = test.simulation(simulation.bio.data = june_week,
-                     seed_production,
-                     sample.fraction = seq.sim[i])
-  test.simulation.results = rbind(test.simulation.results, simulation1)
-}
-
-test.simulation.results %>% 
-  dplyr::select(sample.fraction.used, WindowOpen, WindowClose) %>% 
-  pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
-  left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed))
-
-
-
-
-
-
-
-#climwin need to adjust for 0 - 1, row start at 0 and not 1 
-calendar.climwin = goingbackpastdayscalendar(refday = 304,
-                                     lastdays = 600, 
-                                     yearback = 2) %>% 
+#calendar for sim 
+calendar.sim= goingbackpastdayscalendar(refday = 304,
+                                             lastdays = 400, 
+                                             yearback = 2) %>% 
   filter(YEAR == 1950) %>% 
   dplyr::select(MONTHab, DOY, days.reversed) %>% 
   mutate(datefake  = as.Date(DOY, origin = "1948-01-01"),
@@ -1087,46 +1147,89 @@ calendar.climwin = goingbackpastdayscalendar(refday = 304,
            days.reversed >= 730 & days.reversed < 1095 ~ 3,
            TRUE ~ 4))
 
-climwin_output_simulation$combos %>% 
-  dplyr::select(WindowOpen, WindowClose) %>% 
-  pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
-  left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed)) 
+#do the round if not issues by merging :") 
+data.plot.sim = result_simulations %>% 
+  group_by(method) %>% 
+  summarise(wind.open_median = round(median(window.open, na.rm = TRUE)),
+            wind.close_median = round(median(window.close, na.rm = TRUE)),
+            wind.close_q25 = quantile(window.close, 0.25, na.rm = TRUE),
+            wind.close_q75 = quantile(window.close, 0.75, na.rm = TRUE),
+            wind.open_q25 = quantile(window.open, 0.25, na.rm = TRUE),
+            wind.open_q75 = quantile(window.open, 0.75, na.rm = TRUE)) %>% 
+  pivot_longer(cols = starts_with('wind'), names_to = 'typewind') %>% 
+  separate_wider_delim(typewind, delim = '_', names=c('windows.type', 'metric')) %>% 
+  pivot_wider(names_from = 'metric', values_from = value) %>% 
+  ungroup() %>% 
+  dplyr::left_join(calendar.sim %>% 
+                     mutate(median = days.reversed) %>% 
+                     dplyr::select(DOY, median) %>% 
+                     distinct() %>% 
+                     as_tibble(), 
+                   join_by(median))%>% 
+  mutate(method = recode(method,
+                         "climwin" = "Sliding time window",
+                         "csp" = "Climate sensitivity profile",
+                         "psr" = "P-spline regression",
+                         'signal' = 'Signal processing'))
 
 
-plot.mysim(seed_production)
-plot.mysim = function(seed_production){
-  # Visualize seed production vs. June week temperature
-  ggplot(seed_production, aes(x = mean_temp_june_week, y = log.seed)) +
-    geom_point(color = "blue", size = 3) +
-    geom_smooth(method = "lm", se = FALSE, color = "red") +
-    ggtitle("Seed Production (Perfect Correlation) vs June Week Temperature") +
-    xlab("Mean Temperature (June Week)") +
-    ylab("Seed Production (Count Data)") +
-    theme_minimal()
-  
-  # Histogram of the seed production counts to visualize the distribution
-  #ggplot(seed_production, aes(x = exp(log.seed))) +
-  #  geom_histogram(binwidth = 10, fill = "blue", color = "black", alpha = 0.7) 
+#here with the mean and sd 
+result_simulations %>% 
+  group_by(method) %>% 
+  summarise(wind.open_mean= round(mean(window.open, na.rm = TRUE)),
+            wind.close_mean = round(mean(window.close, na.rm = TRUE)),
+            wind.close_sd = sd(window.close, na.rm = TRUE),
+            wind.open_sd = sd(window.open, na.rm = TRUE)) %>% 
+  pivot_longer(cols = starts_with('wind'), names_to = 'typewind') %>% 
+  separate_wider_delim(typewind, delim = '_', names=c('windows.type', 'metric')) %>% 
+  pivot_wider(names_from = 'metric', values_from = value) %>% 
+  dplyr::left_join(calendar.sim %>% 
+                     mutate(mean = days.reversed) %>% 
+                     dplyr::select(DOY, mean) %>% 
+                     distinct() %>% 
+                     as_tibble(), 
+                   join_by(mean)) 
 
-  print(cor(seed_production$mean_temp_june_week, seed_production$log.seed))
-}
+#now the figures 
+sim.wind = ggplot(data.plot.sim, 
+       aes(x = method, group = windows.type, col = windows.type)) +
+  geom_point(aes(y = median), size = 2,
+             position = position_dodge(width = 0.2))+
+  geom_pointrange(mapping=aes(y=median, 
+                              ymin=q25, 
+                              ymax=q75), 
+                  position = position_dodge(width = 0.2))+
+  coord_flip()+
+  xlab('')+ylab('Days reversed')+
+  scale_color_brewer(palette = "Paired")+
+  scale_fill_brewer(palette = "Paired")+
+  scale_colour_manual(values = brewer.pal(12, "Paired")[c(9,10)])+
+  scale_colour_manual(values = brewer.pal(12, "Paired")[c(9, 10)])+
+  ggpubr::theme_pubr()+
+  theme(legend.position = c(.8,.8),
+        legend.title = element_blank())+
+  geom_hline(yintercept = 156, color = 'black', linetype = 'dotted')+
+  geom_hline(yintercept = 146, color = 'black', linetype = 'dotted')
+
+r2sim = ggplot(result_simulations, aes(x= r2.before.simulate))+
+  geom_histogram(aes(y = ..density..), binwidth = 0.05, 
+                 fill = "#0073C2FF", color = "white", alpha = 0.8) +
+  geom_density(color = "#FC4E07", size = 1) +  
+  geom_vline(aes(xintercept = mean(r2.before.simulate, na.rm = TRUE)), 
+             color = "blue", linetype = "dashed", size = 0.8) + 
+  labs(x = "R2 from simulated relationship",
+       y = "Density") +
+  theme_minimal(base_size = 15) +
+  ggpubr::theme_cleveland()
 
 
-climwin_output_simulation <- climwin::slidingwin(
-  xvar = list(temperature.degree = climate_data$temp),
-  cdate = climate_data$date,
-  bdate = seed_production$Date2,
-  baseline = lm(seed_production~1, data = seed_production),#i Needed to specify the formula here, if not it is not working properly
-  cinterval = 'day',
-  range = c(400, 0),
-  refday = c(01, 11),
-  type = 'absolute',
-  stat = "mean",
-  cmissing = 'method2',
-  func = "lin"
-)
-climwin_output_simulation
+cowplot::save_plot(here("figures/FigureSim.png"),r2sim+sim.wind+plot_annotation(tag_levels = 'a') & 
+                     theme(plot.tag = element_text(size = 12))+
+                     plot_layout(widths = c(.3, 2)), 
+                   ncol = 1.3, nrow = 1, dpi = 300)
 
-plotall(dataset = climwin_output_simulation[[1]]$Dataset,
-        bestmodel = climwin_output_simulation[[1]]$BestModel, 
-        bestmodeldata = climwin_output_simulation[[1]]$BestModelData)
+#find when correct value 
+perfectwin = simulation.all %>% filter(between( WindowOpen, 150, 160),
+                                       between( WindowClose, 140, 150))
+summary(perfectwin$r2.before.climwin)
+

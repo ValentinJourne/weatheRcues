@@ -15,7 +15,8 @@ runing_psr_site(
   matrice = c(3, 1),
   knots = NULL,
   tolerancedays = 7,
-  plot = TRUE
+  plot = TRUE,
+  yearneed = 2
 )
 }
 \arguments{

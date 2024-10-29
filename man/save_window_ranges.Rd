@@ -11,8 +11,8 @@ save_window_ranges(sequences_days)
 }
 \value{
 A data frame with two columns:
-\item{windowsclose}{The start day of each sequence.}
-\item{windowsopen}{The end day of each sequence.}
+\item{window.close}{The start day of each sequence.}
+\item{window.open}{The end day of each sequence.}
 }
 \description{
 This function processes a list of sequences of days and saves the ranges for each sequence. For each sequence, it identifies the start and end days of the window and compiles these into a data frame.

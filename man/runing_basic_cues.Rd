@@ -15,7 +15,9 @@ runing_basic_cues(
   siteforsub = "longitude=-0.15_latitude=50.85",
   climate_csv = climate_csv,
   Results_CSPsub = Results_CSPsub,
-  data = data
+  data = data,
+  variablemoving = "TMEAN",
+  yearneed = 2
 )
 }
 \arguments{

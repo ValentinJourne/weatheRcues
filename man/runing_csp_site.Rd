@@ -13,7 +13,9 @@ runing_csp_site(
   refday = 305,
   lastdays = max(range),
   rollwin = 1,
-  optim.k = F
+  optim.k = F,
+  variablemoving = "TMEAN",
+  yearneed = 2
 )
 }
 \arguments{

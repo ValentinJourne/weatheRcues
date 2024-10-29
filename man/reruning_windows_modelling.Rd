@@ -51,7 +51,7 @@ site-level data to fit a linear model (\code{lm}) using a predefined formula.
 \details{
 The function:
 \enumerate{
-\item Extracts the \code{windowsopen} and \code{windowsclose} values from the \code{window_ranges_df}
+\item Extracts the \code{window.open} and \code{window.close} values from the \code{window_ranges_df}
 for the specified index \code{z}.
 \item Filters \code{rolling.temperature.data} to retrieve climate data within the window range.
 \item Aggregates temperature data (mean temperature) for each combination of \code{LONGITUDE},

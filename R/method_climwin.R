@@ -75,7 +75,7 @@ climwin_site_days <- function(climate_data,
 
   # Load the biological data for the site
   data <- data  %>% 
-    filter(!is.na(eval(parse(text = strsplit(as.character(formulanull)[3], " ~ ")[[1]][1]))))
+    dplyr::filter(!is.na(eval(parse(text = strsplit(as.character(formulanull)[3], " ~ ")[[1]][1]))))
   
   # Run the climwin analysis
   climwin_output <- climwin::slidingwin(
@@ -100,7 +100,7 @@ climwin_site_days <- function(climate_data,
   broom_summary_intercept <- broom::tidy(climwin_output[[1]]$BestModel) %>%
     dplyr::filter(term != 'climate') %>%
     dplyr::select(-term) %>% 
-    rename_with(.cols = everything(), function(x){paste0("intercept.", x)})
+    dplyr::rename_with(.cols = everything(), function(x){paste0("intercept.", x)})
   sigma.model = sigma(climwin_output[[1]]$BestModel)
   
   

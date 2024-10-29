@@ -245,7 +245,8 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
                            lastdays = max(range),
                            rollwin = 1,
                            optim.k = F,
-                           variablemoving = 'TMEAN'){
+                           variablemoving = 'TMEAN',
+                           yearneed = 2){
   
   
   list_slope <- as.list(Results_CSPsub$estimate)
@@ -281,11 +282,11 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
 
   
   # Define the year period
-  yearneed <- 2
+  yearneed <- yearneed#2
   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
   rolling.temperature.data <- purrr::map_dfr(yearperiod, reformat.climate.backtothepast, 
                                       climate = climate_csv, 
-                                      yearneed = yearneed, 
+                                      yearneed, 
                                       refday = refday, 
                                       lastdays = lastdays, 
                                       rollwin = rollwin, 
@@ -293,7 +294,8 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
   output_fit_summary.temp <- purrr::map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = data, 
                                                                                            window_ranges_df = window_ranges_df,
                                                                                            rolling.temperature.data = rolling.temperature.data,
-                                                                                           myform.fin = formula('log.seed ~ mean.temperature')))
+                                                                                           myform.fin = formula('log.seed ~ mean.temperature'),
+                                                                                           yearneed))
   return(output_fit_summary.temp)
   
 }
