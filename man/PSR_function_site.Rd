@@ -7,11 +7,13 @@
 PSR_function_site(
   site,
   seed.data,
-  tot_days,
+  lastdays,
   refday,
   climate.path,
   matrice = c(3, 1),
-  knots = NULL
+  knots = NULL,
+  tolerancedays = 7,
+  yearneed = 2
 )
 }
 \arguments{
@@ -19,13 +21,11 @@ PSR_function_site(
 
 \item{seed.data}{A data frame containing biological data (e.g., seed production) with columns such as \code{plotname.lon.lat}, \code{Year}, and \code{log.seed}.}
 
-\item{tot_days}{Integer specifying the total number of days to include in the analysis (default is 600).}
+\item{lastdays}{Integer specifying the final day for the analysis (usually the length of the time series).}
 
 \item{matrice}{A numeric vector of length 2 indicating the penalties to apply in the smoothing function of the model (default is \code{c(3,1)}).}
 
 \item{knots}{Integer specifying the number of knots for the GAM model. If \code{NULL} (default), the function will set the knots to the number of years minus one.}
-
-\item{lastdays}{Integer specifying the final day for the analysis (usually the length of the time series).}
 }
 \value{
 A data frame summarizing the significant weather cues for the site based on the PSR method. If no significant windows are found, the function returns a data frame with \code{NA} values.
@@ -43,7 +43,7 @@ site <- "site_name"
 seed.data <- your_fagus_data
 result <- PSR_function_site(site = site,
                             seed.data = seed.data,
-                            tot_days = 600,
+                            lastdays = 600,
                             lastdays = 600,
                             matrice = c(3,1),
                             knots = NULL)

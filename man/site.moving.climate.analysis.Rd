@@ -6,11 +6,13 @@
 \usage{
 site.moving.climate.analysis(
   bio_data,
-  climate.data,
+  climate_data,
   lastdays,
   myform,
   refday = 305,
-  yearneed = 2
+  yearneed = 2,
+  model_type = "lm",
+  rollwin = 1
 )
 }
 \arguments{

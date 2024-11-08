@@ -413,8 +413,8 @@ extract_sequences_auto <- function(vec, tolerance) {
 #' @param z Integer. The index representing the row number in the `window_ranges_df` data frame, which contains the window ranges for analysis.
 #' @param tible.sitelevel Data frame. The biological site-level data, which contains 
 #'   seed production and other relevant variables for modeling. Default is `tible.sitelevel`.
-#' @param rolling.temperature.data Data frame. The climate data containing 
-#'   rolling temperature averages and other climate variables. Default is `rolling.temperature.data`.
+#' @param rolling.data Data frame. The climate data containing 
+#'   rolling temperature averages and other climate variables. Default is `rolling.data`.
 #'
 #' @return A data frame containing the model results, which include:
 #'   - `sitenewname`: The name of the biological site.
@@ -437,7 +437,7 @@ extract_sequences_auto <- function(vec, tolerance) {
 #' The function:
 #' 1. Extracts the `window.open` and `window.close` values from the `window_ranges_df`
 #'    for the specified index `z`.
-#' 2. Filters `rolling.temperature.data` to retrieve climate data within the window range.
+#' 2. Filters `rolling.data` to retrieve climate data within the window range.
 #' 3. Aggregates temperature data (mean temperature) for each combination of `LONGITUDE`, 
 #'    `LATITUDE`, and `year`.
 #' 4. Joins the filtered climate data with biological site-level data (`tible.sitelevel`).
@@ -446,19 +446,52 @@ extract_sequences_auto <- function(vec, tolerance) {
 #'    number of observations, and sequence ID.
 #'
 #' @examples
-#' # Assuming window_ranges_df, rolling.temperature.data, and tible.sitelevel are defined:
-#' result <- reruning_windows_modelling(1, tible.sitelevel = tible.sitelevel, rolling.temperature.data = rolling.temperature.data)
+#' # Assuming window_ranges_df, rolling.data, and tible.sitelevel are defined:
+#' result <- reruning_windows_modelling(1, tible.sitelevel = tible.sitelevel, rolling.data = rolling.data)
 #' print(result)
 #'
 #' @export
 reruning_windows_modelling = function(z, 
                                       tible.sitelevel = tible.sitelevel, 
                                       window_ranges_df = window_ranges_df, 
-                                      rolling.temperature.data = rolling.temperature.data, 
-                                      myform.fin = formula('log.seed ~ mean.temperature'), 
+                                      rolling.data = rolling.data, 
+                                      myform.fin = formula('log.seed ~ mean.temperature'),
+                                      model_type = 'lm',
                                       refday = 305, 
                                       rollwin = 1) {
   
+  if (!is.numeric(z) || length(z) != 1) {
+    stop("`z` must be a numeric value of length 1.")
+  }
+  
+  if (!is.data.frame(tible.sitelevel)) {
+    stop("`tible.sitelevel` must be a data frame or tibble.")
+  }
+  
+  if (!is.data.frame(window_ranges_df)) {
+    stop("`window_ranges_df` must be a data frame or tibble.")
+  }
+  
+  if (!is.data.frame(rolling.data)) {
+    stop("`rolling.data` must be a data frame or tibble.")
+  }
+  
+  if (!inherits(myform.fin, "formula")) {
+    stop("`myform.fin` must be a formula.")
+  }
+  
+  if (!model_type %in% c("lm", "betareg")) {
+    stop("`model_type` must be either 'lm' or 'betareg'.")
+  }
+  
+  if (!is.numeric(refday) || length(refday) != 1) {
+    stop("`refday` must be a numeric value of length 1.")
+  }
+  if (!is.numeric(rollwin) || length(rollwin) != 1) {
+    stop("`rollwin` must be a numeric value of length 1.")
+  }
+  
+  covariates.of.interest = as.character(myform.fin)[3]
   
   # Extract the window open and close for the current iteration
   window.open <- window_ranges_df$window.open[z]
@@ -466,12 +499,15 @@ reruning_windows_modelling = function(z,
   window_number <- window_ranges_df$windows.sequences.number[z]
   
   # Filter the rolling temperature data according to the current window range
-  climate_windows_best <- rolling.temperature.data %>%
+  climate_windows_best <- rolling.data %>%
     dplyr::filter(days.reversed <= window.open & days.reversed >= window.close) %>%
     dplyr::group_by(LONGITUDE, LATITUDE, year) %>%
-    dplyr::summarise(mean.temperature = mean(rolling_avg_tmean, na.rm = TRUE)) %>%
+    dplyr::summarise(variableofinterest.aggregate = mean(!!sym(covariates.of.interest), na.rm = TRUE)) %>%
     dplyr::ungroup() %>%
     dplyr::mutate(window_number = window_number)  # Add the window number for identification
+  
+  #i am chaning col 4 
+  colnames(climate_windows_best)[4]<-covariates.of.interest
   
   for (col in colnames(tible.sitelevel)) {
     if (col == "Year") {
@@ -480,14 +516,31 @@ reruning_windows_modelling = function(z,
   }
   
   # Merge temperature data with the site-level data and fit the model
-  fit.best.model <- tible.sitelevel %>%
+  fit.best.mode.data <- tible.sitelevel %>%
     #mutate(year = Year) %>%
-    dplyr::left_join(climate_windows_best, by = "year") %>%
-    lm(myform.fin, data = .)
+    dplyr::left_join(climate_windows_best, by = "year") 
+  
+  if (model_type == 'lm') {
+    fit.best.model = lm(myform.fin, data = fit.best.mode.data)
+  } else {
+    # Ensure the dependent variable is between 0 and 1 for `betareg`
+    if (model_type == 'betareg')
+      fit.best.model = betareg::betareg(myform.fin, data = fit.best.mode.data)
+  }
   
   # Extract model coefficients and statistics
   tidy_model <- broom::tidy(fit.best.model)
   glance_model <- broom::glance(fit.best.model)
+  
+  if (model_type == 'lm') {
+    r2 = glance_model$r.squared
+    sigma = glance_model$sigma
+  } else {
+    # Ensure the dependent variable is between 0 and 1 for `betareg`
+    if (model_type == 'betareg')
+      r2 = glance_model$pseudo.r.squared
+     sigma = NA
+  }
   
   # Create a data frame for the results
   data.frame(
@@ -495,7 +548,6 @@ reruning_windows_modelling = function(z,
     plotname.lon.lat = unique(tible.sitelevel$plotname.lon.lat),
     reference.day = refday,
     windows.size = rollwin,
-    #knots.number = results$k,
     window.open = window.open,
     window.close = window.close,
     intercept.estimate = tidy_model$estimate[1],
@@ -503,9 +555,9 @@ reruning_windows_modelling = function(z,
     slope.estimate = tidy_model$estimate[2],
     slope.std.error = tidy_model$std.error[2],
     pvalue = tidy_model$p.value[2],
-    r2 = glance_model$r.squared,
+    r2 = r2,
     AIC = glance_model$AIC,
-    sigma = glance_model$sigma,
+    sigma = sigma,
     nobs = glance_model$nobs,
     nsequence.id = z
   )
@@ -565,18 +617,41 @@ reformat.climate.backtothepast <- function(yearsref = 2000,
                                            refday = 274, 
                                            lastdays = 1095, 
                                            rollwin = 1, 
-                                           variablemoving = 'temperature.degree') {
-  # Print parameter values - to see if no shit 
-  #print(paste("rollwin - size window:", rollwin))
-  #print(paste("refday - reference day:", refday))
-  #print(paste("lastdays - last day:", lastdays))
-  #print(paste("variablemoving - variable to move:", variablemoving))
-  #print(paste("yearneed - adjust to maturation fruit time :", yearneed, 'years'))
+                                           variablemoving = 'temperature.degree',
+                                           align.moving = 'right') {
   
-  if (!variablemoving %in% names(climate)) {
-    warning(paste("Warning: Column", variablemoving, "not found in the dataset."))
-    return(NULL)
+  validate_inputs <- function() {
+    # Check that yearsref and yearneed are integers
+    if (!is.numeric(yearsref) || length(yearsref) != 1) stop("yearsref must be a single numeric value.")
+    if (!is.numeric(yearneed) || length(yearneed) != 1) stop("yearneed must be a single numeric value.")
+    
+    # Check that climate is a data frame with required columns
+    if (!is.data.frame(climate)) stop("climate must be a data frame.")
+    
+    required_columns <- c("year", "yday", "LONGITUDE", "LATITUDE", "date", variablemoving)
+    missing_columns <- setdiff(required_columns, names(climate))
+    if (length(missing_columns) > 0) {
+      stop(paste("The climate data frame is missing required columns:", paste(missing_columns, collapse = ", ")))
+    }
+    
+    # Ensure variablemoving column exists and is numeric
+    if (!variablemoving %in% names(climate)) {
+      stop(paste("Column", variablemoving, "not found in the climate dataset."))
+    } else if (!is.numeric(climate[[variablemoving]])) {
+      stop(paste("The column", variablemoving, "must be numeric for rolling mean calculations."))
+    }
+    
+    # Check that refday and lastdays are positive integers
+    if (!is.numeric(refday) || length(refday) != 1 || refday <= 0) stop("refday must be a positive numeric value.")
+    if (!is.numeric(lastdays) || length(lastdays) != 1 || lastdays <= 0) stop("lastdays must be a positive numeric value.")
+    
+    # Check that rollwin is a positive integer
+    if (!is.numeric(rollwin) || length(rollwin) != 1 || rollwin <= 0) stop("rollwin must be a positive numeric value.")
   }
+  
+  # Run the validation tests
+  validate_inputs()
+  
   
   #need to adjust for leap years?
   if(lubridate::leap_year(yearsref)==TRUE){
@@ -601,10 +676,11 @@ reformat.climate.backtothepast <- function(yearsref = 2000,
   #use !!sym; convert a string, here my variable name, to a symbol
   ttupfin <- ttup %>%
     dplyr::arrange(days.reversed) %>%
-    dplyr::mutate(rolling_avg_tmean = zoo::rollmeanr(!!sym(variablemoving), k = rollwin, fill = NA, align = 'right')) %>%
+    dplyr::mutate(rolling_avg_tmean = zoo::rollmeanr(!!sym(variablemoving), k = rollwin, fill = NA, align = align.moving)) %>%
     dplyr::mutate(year = max(year)) %>%
     dplyr::select(LONGITUDE, LATITUDE, year, date, yday, days.reversed, rolling_avg_tmean)
   
+  colnames(ttupfin)[7] = paste(variablemoving)
   return(ttupfin)
 }
 
@@ -614,7 +690,7 @@ reformat.climate.backtothepast <- function(yearsref = 2000,
 #' This function performs a moving window analysis to investigate the relationship between a response variable (e.g., seed count) and a rolling climate variable (e.g., temperature) over time. It calculates correlation coefficients, fits linear models, and extracts relevant statistics.
 #'
 #' @param data A data frame containing the seed count and other site-level information. It should include columns `Year` (or `year`), `sitenewname`, and `log.seed`.
-#' @param rolling.temperature.data A data frame containing rolling climate data, including the rolling average temperature and a `days.reversed` column for the moving window analysis.
+#' @param rolling.data A data frame containing rolling climate data, including the rolling average temperature and a `days.reversed` column for the moving window analysis.
 #' @param method A string specifying the correlation method to use. Default is 'spearman'. Other options include 'pearson' and 'kendall'.
 #' @param covariates.of.interest A string specifying the name of the climate variable to be used as a covariate in the analysis. Default is 'rolling_avg_tmean'.
 #' @param myform A formula specifying the model to fit for each moving window. Default is \code{formula('log.seed~rolling_avg_tmean')}.
@@ -650,19 +726,42 @@ reformat.climate.backtothepast <- function(yearsref = 2000,
 #' Year = as.numeric(2000:2019),
 #' sitenewname = rep('site1', 20),
 #' log.seed = rnorm(20))
-#' rolling.temperature.data <- data.frame(
+#' rolling.data <- data.frame(
 #' days.reversed = 1:365,
 #' rolling_avg_tmean = rnorm(365), year = 2017)
 #'
 #' # Run the moving window analysis
-#' result <- running.movingwin.analysis(data = data, rolling.temperature.data = rolling.temperature.data)
+#' result <- running.movingwin.analysis(data = data, rolling.data = rolling.data)
 #'
 runing.movingwin.analysis = function(data = data,
-                                     rolling.temperature.data = rolling.temperature.data,
+                                     rolling.data = rolling.data,
                                      method = 'spearman',
-                                     covariates.of.interest = 'rolling_avg_tmean',
-                                     myform = formula('log.seed~rolling_avg_tmean')){
+                                     myform = formula('log.seed~temperature'),
+                                     model_type = 'lm'){
   
+  
+  if (!is.data.frame(data) && !is_tibble(data)) {
+    stop("data must be a data frame or tibble.")
+  }
+  
+  if (!is.data.frame(rolling.data) && !is_tibble(rolling.data)) {
+    stop("rolling.data must be a data frame or tibble.")
+  }
+  
+  if (!model_type %in% c('lm', 'betareg')) {
+    stop("model_type must be either 'lm' or 'betareg'")
+  }
+  
+  if (!inherits(myform, "formula")) {
+    stop("myform must be a valid formula.")
+  }
+  
+  covariates.of.interest = as.character(myform)[3]
+  if (!covariates.of.interest %in% colnames(rolling.data)) {
+    stop(paste("Column", covariates.of.interest, "not found in rolling.data"))
+  }
+  
+  #for me because sometimes not same name Year or year
   for (col in colnames(data)) {
     if (col == "Year") {
       colnames(data)[colnames(data) == "Year"] <- "year"
@@ -672,7 +771,7 @@ runing.movingwin.analysis = function(data = data,
   #merge data seed to moving climate
   tible.sitelevel = data %>% #site = bio_data 
     #rename(year = Year) %>% 
-    dplyr::left_join(rolling.temperature.data) %>% 
+    dplyr::left_join(rolling.data) %>% 
     tidyr::drop_na(!!sym(covariates.of.interest))
   
   #define correlation - calculate correlation and se, extract also p value 
@@ -692,27 +791,39 @@ runing.movingwin.analysis = function(data = data,
   
   #use purr for iteration 
   #here broom package used, because it is simple lm (and not glmmTMB, need to adjust then )
-  fitted_models = tible.sitelevel %>%
-    nest(data = -days.reversed) %>%
-    mutate(model = purrr::map(data, ~lm(myform, data = ., na.action = na.omit)),
-           tidied = purrr::map(model, broom::tidy),
-           glanced = purrr::map(model, broom::glance),
-           augmented = purrr::map(model, broom::augment))
   
-  slope = fitted_models %>%
+  fitted_models <- tible.sitelevel %>%
+    tidyr::nest(data = -days.reversed) %>%
+    mutate(model = purrr::map(data, ~{
+      if (model_type == 'lm') {
+        lm(myform, data = ., na.action = na.omit)
+      } else {
+        # Ensure the dependent variable is between 0 and 1 for `betareg`
+        if (model_type == 'betareg')
+        betareg::betareg(myform, data = .)
+      }
+    }),
+    tidied = purrr::map(model, broom::tidy),
+    glanced = purrr::map(model, broom::glance),
+    augmented = purrr::map(model, broom::augment))
+
+  
+  modelr2 = fitted_models %>%
+    tidyr::unnest(glanced) %>%
+    dplyr::select(days.reversed, dplyr::contains('r.squared'), logLik) 
+  
+  octopus = fitted_models %>%
     tidyr::unnest(tidied) %>% 
     dplyr::filter(str_detect(term, as.character(myform)[3])) %>% 
     dplyr::select(days.reversed,term, estimate, std.error, p.value) %>% 
     dplyr::mutate(sitenewname  = unique(tible.sitelevel$sitenewname)) %>% 
-    dplyr::left_join(fitted_models %>%
-                tidyr::unnest(glanced) %>% 
-                dplyr::select(days.reversed,r.squared, logLik) %>% 
-                  dplyr::mutate(sitenewname  = unique(tible.sitelevel$sitenewname),
-                       plotname.lon.lat = unique(tible.sitelevel$plotname.lon.lat))) %>% 
+    dplyr::left_join(modelr2) %>% 
+    dplyr::mutate(sitenewname = unique(tible.sitelevel$sitenewname),
+                 plotname.lon.lat = unique(tible.sitelevel$plotname.lon.lat)) %>% 
     dplyr::select(sitenewname, plotname.lon.lat, days.reversed, everything()) %>% 
     dplyr::left_join(cortemp)
   
-  return(slope)
+  return(octopus)
 }
 
 #' Perform Moving Window Analysis for a Specific Site
@@ -758,29 +869,65 @@ runing.movingwin.analysis = function(data = data,
 #' )
 #'
 site.moving.climate.analysis <- function(bio_data, 
-                                         climate.data, 
+                                         climate_data, 
                                          lastdays, 
                                          myform,
                                          refday = 305,
-                                         yearneed = 2) {
+                                         yearneed = 2,
+                                         model_type = 'lm',
+                                         rollwin = 1) {
+  if (!is.data.frame(bio_data) && !is_tibble(bio_data)) {
+    stop("bio_data must be a data frame or tibble.")
+  }
+  
+  if (!is.data.frame(climate_data) && !is_tibble(climate_data)) {
+    stop("climate_data must be a data frame or tibble.")
+  }
+  
+  if (!is.numeric(lastdays) || length(lastdays) != 1) {
+    stop("lastdays must be a numeric value of length 1.")
+  }
+  
+  if (!is.numeric(refday) || length(refday) != 1) {
+    stop("refday must be a numeric value of length 1.")
+  }
+  
+  if (!is.numeric(yearneed) || length(yearneed) != 1) {
+    stop("yearneed must be a numeric value of length 1.")
+  }
+  
+  if (!is.character(model_type) || length(model_type) != 1 || !model_type %in% c('lm', 'betareg')) {
+    stop("model_type must be either 'lm' or 'betareg'.")
+  }
+  
+  if (!inherits(myform, "formula")) {
+    stop("myform must be a valid formula. Double check your formula, because both response and predictors are needed well defined")
+  }
+  
+  if (!as.character(myform)[2] %in% colnames(bio_data)) {
+    stop(paste("Column", as.character(myform)[2], "not found in bio_data."))
+  }
+  if (!as.character(myform)[3] %in% colnames(climate_data)) {
+    stop(paste("Column", as.character(myform)[3], "not found in climate_data"))
+  }
   # Define the year period
   #yearneed <- 2
-  yearperiod <- (min(climate.data$year) + yearneed):max(climate.data$year)
+  yearperiod <- (min(climate_data$year) + yearneed):max(climate_data$year)
   
   # Apply the function across all years in yearperiod and combine results
-  rolling.temperature.data <- purrr::map_dfr(yearperiod, reformat.climate.backtothepast, 
-                                             climate = climate.data, 
+  rolling.data <- purrr::map_dfr(yearperiod, reformat.climate.backtothepast, 
+                                             climate = climate_data, 
                                              yearneed = yearneed, 
                                              refday = refday, 
                                              lastdays = lastdays, 
-                                             rollwin = 1, 
-                                             variablemoving = 'TMEAN')
+                                             rollwin = rollwin, 
+                                             variablemoving =  as.character(myform)[3])
   
   results.moving.site = runing.movingwin.analysis(data = bio_data,
-                                                  rolling.temperature.data = rolling.temperature.data,
+                                                  rolling.data = rolling.data,
                                                   method = 'spearman',
-                                                  covariates.of.interest = 'rolling_avg_tmean',
-                                                  myform = myform)
+                                                  myform = myform,
+                                                  model_type = model_type)
   
   return(results.moving.site)
 }
@@ -821,11 +968,13 @@ site.moving.climate.analysis <- function(bio_data,
 #'   rollwin = 1
 #' )
 #'
-FULL.moving.climate.analysis <- function(seed.data.all = seed.data.all,
-                                         climate.path = climate.path,
+FULL.moving.climate.analysis <- function(seed.data.all,
+                                         climate.path,
                                          refday = 305,
-                                         lastdays = max(range),
-                                         rollwin = 1) {
+                                         lastdays = 700,
+                                         rollwin = 1,
+                                         myform = formula('log.seed ~ TMEAN'),
+                                         model_type = 'lm') {
   
   # Get the list of unique site names from seed data
   al.sites <- unique(seed.data.all$sitenewname)
@@ -848,9 +997,12 @@ FULL.moving.climate.analysis <- function(seed.data.all = seed.data.all,
     # run csp site level
     site.moving.climate.analysis(
       bio_data = bio_data, 
-      climate.data = climate_data, 
+      climate_data = climate_data, 
       lastdays = lastdays,
-      myform = formula('log.seed ~ rolling_avg_tmean')
+      refday = refday,
+      rollwin = 1,
+      myform = myform,
+      model_type = model_type
     )
   })
   
@@ -882,23 +1034,25 @@ FULL.moving.climate.analysis <- function(seed.data.all = seed.data.all,
     sd(x2)/sqrt(n)
   }
   
-#' Format Climate Data
+#' Format Climate Data for a Specified Site
 #'
-#' This function reads climate data from a specified file path for a given site, 
-#' applies necessary transformations and scaling, and returns the formatted data.
+#' This function reads climate data from a specified directory for a given site, applies necessary transformations, 
+#' and optionally scales the climate variables. The function can read files in either `.qs` or `.csv` format.
 #'
-#' @param site Character. The site identifier used to match climate data files (e.g., "site_name").
-#' @param path Character. The directory path where the climate data files are stored.
+#' @param site Character. The site identifier used to match climate data files (e.g., `"site_name"`). Must be a single string.
+#' @param path Character. The directory path where the climate data files are stored. Must be a valid path as a single string.
 #' @param scale.climate Logical. Should the climate variables (`TMEAN`, `TMAX`, `TMIN`, `PRP`) be standardized? Defaults to `TRUE`.
+#' @param file_type Character. The file type of the climate data. Must be either `"qs"` or `"csv"`. Defaults to `"qs"`.
 #'
 #' @details The function performs the following steps:
-#' - Reads the climate data file for the specified site using `qs::qread()`.
+#' - Reads the climate data file for the specified site using `qs::qread()` for `.qs` files or `readr::read_csv()` for `.csv` files.
 #' - Converts the `DATEB` field to a proper date format.
 #' - Applies a transformation using the `foo()` function (assumed to adjust the year based on an origin date of 1949).
-#' - Extracts the year and day of the year (`yday`) from the date.
-#' - Converts temperature (`TMEAN`, `TMAX`, `TMIN`) and precipitation (`PRP`) to numeric format.
+#' - Extracts the year and day of the year (`yday`) from the transformed date.
+#' - Converts temperature (`TMEAN`, `TMAX`, `TMIN`) and precipitation (`PRP`) variables to numeric format.
 #' 
-#' If `scale.climate` is `TRUE`, the climate variables are standardized using `scale()`. The standardized values are then converted to vectors using `as.vector()`.
+#' If `scale.climate` is `TRUE`, the climate variables (`TMEAN`, `TMAX`, `TMIN`, `PRP`) are standardized using `scale()`. 
+#' The standardized values are then converted to vectors using `as.vector()`.
 #'
 #' @return A `data.frame` containing the formatted climate data with columns:
 #' - `DATEB`: Original date (before transformation).
@@ -911,27 +1065,63 @@ FULL.moving.climate.analysis <- function(seed.data.all = seed.data.all,
 #'
 #' @importFrom dplyr mutate across
 #' @importFrom qs qread
+#' @importFrom readr read_csv
 #' @importFrom lubridate yday year
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #' # Format climate data for site "example_site" located at "/data/climate"
-#' formatted_data <- format_climate_data(site = "example_site", path = "/data/climate", scale.climate = TRUE)
+#' formatted_data <- format_climate_data(
+#'   site = "example_site", 
+#'   path = "/data/climate", 
+#'   scale.climate = TRUE, 
+#'   file_type = "qs"
+#' )
 #' }
-format_climate_data <- function(site,
-                                path,
-                                scale.climate = TRUE) {
-  climate_data <- qs::qread(list.files(path = path, full.names = TRUE, pattern = site)) %>%
-    as.data.frame() %>%
-    dplyr::mutate(DATEB = as.Date(DATEB, format = "%m/%d/%y")) %>%
-    dplyr::mutate(date = foo(DATEB, 1949)) %>%  
-    dplyr::mutate(yday = yday(date),
-           year = year(date)) %>%
-    dplyr::mutate(TMEAN = as.numeric(TMEAN),
-           TMAX = as.numeric(TMAX),
-           TMIN = as.numeric(TMIN),
-           PRP = as.numeric(PRP))
+format_climate_data <- function(site = 'sitename',
+                                path = 'D/mypath',
+                                scale.climate = TRUE,
+                                file_type = "qs") {
+  # Input validation checks
+  if (!is.character(site) || length(site) != 1) {
+    stop("Error: 'site' should be a single string representing the site name.")
+  }
+  
+  if (!is.character(path) || length(path) != 1 || !dir.exists(path)) {
+    stop("Error: 'path' should be a valid directory path in character format.")
+  }
+  
+  if (!is.logical(scale.climate) || length(scale.climate) != 1) {
+    stop("Error: 'scale.climate' should be a single logical value (TRUE or FALSE).")
+  }
+  if (!file_type %in% c("qs", "csv")) {
+    stop("Error: 'file_type' should be either 'qs' or 'csv'.")
+  }
+  
+  #get the fil path matching site name 
+  file_path <- list.files(path = path, full.names = TRUE, pattern = site)
+  
+  # Load climate data based on file type
+  if (file_type == "qs") {
+    climate_data <- qs::qread(file_path) %>%
+      as.data.frame()
+  } else if (file_type == "csv") {
+    climate_data <- readr::read_csv(file_path) %>%
+      as.data.frame()
+  }
+  
+  climate_data <- climate_data %>%
+    dplyr::mutate(
+      DATEB = as.Date(DATEB, format = "%m/%d/%y"),
+      date = foo(DATEB, 1949),
+      yday = yday(date),
+      year = year(date),
+      TMEAN = as.numeric(TMEAN),
+      TMAX = as.numeric(TMAX),
+      TMIN = as.numeric(TMIN),
+      PRP = as.numeric(PRP)
+    )
   
   if (scale.climate) {
     climate_data <- climate_data %>%
@@ -1093,3 +1283,32 @@ create_blocks <- function(data, num_blocks) {
   
   return(blocks[1:num_blocks])  # Return only the requested number of blocks
 }
+
+#' Transform Response Variable for Beta Regression
+#'
+#' This function transforms a response variable \( y \) for use in beta regression
+#' by scaling it to fit the range required by beta regression models. The transformation
+#' is performed as follows:
+#' 
+#' \deqn{y' = \frac{y \cdot (n - 1) + 0.5}{n}} 
+#'
+#' where \( n \) is the number of non-missing observations in \( y \).
+#'
+#' @param y A numeric vector of response values that are to be transformed. The vector 
+#'          can contain NA values which will be ignored in the calculation of the transformation.
+#'
+#' @return A numeric vector of the same length as `y`, containing the transformed response values. 
+#'         Values are scaled to the range (0, 1), suitable for beta regression.
+#'
+#' @examples
+#' # Example usage
+#' y <- c(0.1, 0.5, NA, 0.3, 0.9)
+#' transformed_y <- y.transf.betareg(y)
+#' print(transformed_y)
+#'
+#' @export
+y.transf.betareg <- function(y){
+  n.obs <- sum(!is.na(y))
+  (y * (n.obs - 1) + 0.5) / n.obs
+}
+

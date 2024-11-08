@@ -166,7 +166,9 @@ runing_basic_cues = function(lag  = 100,
                              Results_CSPsub = Results_CSPsub,
                              data = data,
                              variablemoving = 'TMEAN',
-                             yearneed = 2){
+                             yearneed = 2,
+                             myform.fin=formula('log.seed ~ mean.temperature'),
+                             model_type = 'lm'){
   
   #mostly similar strucutre to CSP methods 
   list_slope <- as.list(Results_CSPsub$estimate)
@@ -205,7 +207,7 @@ runing_basic_cues = function(lag  = 100,
   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
   
   # Apply the function across all years in yearperiod and combine results
-  rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
+  rolling.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
                                       climate = climate_csv, 
                                       yearneed, 
                                       refday = refday, 
@@ -215,9 +217,10 @@ runing_basic_cues = function(lag  = 100,
   
   output_fit_summary.temp.basic <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = data, 
                                                                                                  window_ranges_df = window_ranges_df,
-                                                                                                 rolling.temperature.data = rolling.temperature.data,
-                                                                                                 myform.fin = formula('log.seed ~ mean.temperature'),
-                                                                                                 yearneed))
+                                                                                                 rolling.data = rolling.data,
+                                                                                                 myform.fin = myform.fin,
+                                                                                                 yearneed,
+                                                                                                 model_type = model_type))
   
   
 }
@@ -282,8 +285,11 @@ basiccues_function_site <- function(Results_CSPsub,
                     tolerancedays = 7,
                     refday = 305,
                     lastdays = 600,
-                    rollwin = 1,
+                    rollwin = rollwin,
                     climate_csv = climate_data,
-                    Results_CSPsub = Results_CSPsub)
+                    Results_CSPsub = Results_CSPsub,
+                    variablemoving = 'TMEAN',
+                    myform.fin = formula('log.seed~TMEAN'),
+                    model_type = 'lm')
 }
 

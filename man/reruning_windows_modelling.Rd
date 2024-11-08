@@ -8,8 +8,9 @@ reruning_windows_modelling(
   z,
   tible.sitelevel = tible.sitelevel,
   window_ranges_df = window_ranges_df,
-  rolling.temperature.data = rolling.temperature.data,
+  rolling.data = rolling.data,
   myform.fin = formula("log.seed ~ mean.temperature"),
+  model_type = "lm",
   refday = 305,
   rollwin = 1
 )
@@ -20,8 +21,8 @@ reruning_windows_modelling(
 \item{tible.sitelevel}{Data frame. The biological site-level data, which contains
 seed production and other relevant variables for modeling. Default is \code{tible.sitelevel}.}
 
-\item{rolling.temperature.data}{Data frame. The climate data containing
-rolling temperature averages and other climate variables. Default is \code{rolling.temperature.data}.}
+\item{rolling.data}{Data frame. The climate data containing
+rolling temperature averages and other climate variables. Default is \code{rolling.data}.}
 }
 \value{
 A data frame containing the model results, which include:
@@ -53,7 +54,7 @@ The function:
 \enumerate{
 \item Extracts the \code{window.open} and \code{window.close} values from the \code{window_ranges_df}
 for the specified index \code{z}.
-\item Filters \code{rolling.temperature.data} to retrieve climate data within the window range.
+\item Filters \code{rolling.data} to retrieve climate data within the window range.
 \item Aggregates temperature data (mean temperature) for each combination of \code{LONGITUDE},
 \code{LATITUDE}, and \code{year}.
 \item Joins the filtered climate data with biological site-level data (\code{tible.sitelevel}).
@@ -63,8 +64,8 @@ number of observations, and sequence ID.
 }
 }
 \examples{
-# Assuming window_ranges_df, rolling.temperature.data, and tible.sitelevel are defined:
-result <- reruning_windows_modelling(1, tible.sitelevel = tible.sitelevel, rolling.temperature.data = rolling.temperature.data)
+# Assuming window_ranges_df, rolling.data, and tible.sitelevel are defined:
+result <- reruning_windows_modelling(1, tible.sitelevel = tible.sitelevel, rolling.data = rolling.data)
 print(result)
 
 }

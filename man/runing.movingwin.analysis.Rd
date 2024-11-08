@@ -6,22 +6,22 @@
 \usage{
 runing.movingwin.analysis(
   data = data,
-  rolling.temperature.data = rolling.temperature.data,
+  rolling.data = rolling.data,
   method = "spearman",
-  covariates.of.interest = "rolling_avg_tmean",
-  myform = formula("log.seed~rolling_avg_tmean")
+  myform = formula("log.seed~temperature"),
+  model_type = "lm"
 )
 }
 \arguments{
 \item{data}{A data frame containing the seed count and other site-level information. It should include columns \code{Year} (or \code{year}), \code{sitenewname}, and \code{log.seed}.}
 
-\item{rolling.temperature.data}{A data frame containing rolling climate data, including the rolling average temperature and a \code{days.reversed} column for the moving window analysis.}
+\item{rolling.data}{A data frame containing rolling climate data, including the rolling average temperature and a \code{days.reversed} column for the moving window analysis.}
 
 \item{method}{A string specifying the correlation method to use. Default is 'spearman'. Other options include 'pearson' and 'kendall'.}
 
-\item{covariates.of.interest}{A string specifying the name of the climate variable to be used as a covariate in the analysis. Default is 'rolling_avg_tmean'.}
-
 \item{myform}{A formula specifying the model to fit for each moving window. Default is \code{formula('log.seed~rolling_avg_tmean')}.}
+
+\item{covariates.of.interest}{A string specifying the name of the climate variable to be used as a covariate in the analysis. Default is 'rolling_avg_tmean'.}
 }
 \value{
 A data frame with the following columns:
@@ -58,11 +58,11 @@ data <- data.frame(
 Year = as.numeric(2000:2019),
 sitenewname = rep('site1', 20),
 log.seed = rnorm(20))
-rolling.temperature.data <- data.frame(
+rolling.data <- data.frame(
 days.reversed = 1:365,
 rolling_avg_tmean = rnorm(365), year = 2017)
 
 # Run the moving window analysis
-result <- running.movingwin.analysis(data = data, rolling.temperature.data = rolling.temperature.data)
+result <- running.movingwin.analysis(data = data, rolling.data = rolling.data)
 
 }

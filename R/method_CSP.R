@@ -139,6 +139,10 @@ get_predictions_windows <- function(slope_gam, rs_gam, temporary) {
 #' result_fixed_k <- optimize_and_fit_gam(temporary, optim.k = FALSE, k = 30, plots = TRUE)
 #'
 optimize_and_fit_gam <- function(temporary, optim.k = TRUE, plots = F, k = 20) {
+  if (!is.data.frame(temporary) && !is_tibble(temporary) || ncol(temporary) < 2) {
+    stop("You need data frame with at least two columns to fit the gam optimize.")
+  }
+  
   if (optim.k) {
     # Function to check significance in k.check
     is_significant <- function(check) {
@@ -246,8 +250,43 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
                            rollwin = 1,
                            optim.k = F,
                            variablemoving = 'TMEAN',
+                           myform.fin = formula('seed~TMEAN'),
+                           model_type = 'lm',
                            yearneed = 2){
   
+  if (!is.data.frame(Results_CSPsub) && !is_tibble(climate_data) || ncol(Results_CSPsub) < 2) {
+    stop("Results_CSPsub must be a data frame with at least two columns: estimate and r.squared.")
+  }
+  if (!is.data.frame(data) && !is_tibble(data) || nrow(data) == 0) {
+    stop("data must be a non-empty data frame.")
+  }
+  if (!is.data.frame(climate_csv) || nrow(climate_csv) == 0) {
+    stop("climate_csv must be a non-empty data frame.")
+  }
+  if (!is.numeric(lastdays) || length(lastdays) != 1) {
+    stop("lastdays must be a numeric value of length 1.")
+  }
+  if (!is.numeric(refday) || length(refday) != 1) {
+    stop("refday must be a numeric value of length 1.")
+  }
+  if (!is.numeric(yearneed) || length(yearneed) != 1) {
+    stop("yearneed must be a numeric value of length 1.")
+  }
+  if (!is.numeric(rollwin) || length(rollwin) != 1) {
+    stop("rollwin must be a numeric value of length 1.")
+  }
+  if (!is.character(siteneame.forsub) || length(siteneame.forsub) != 1) {
+    stop("siteneame.forsub must be a character string of length 1.")
+  }
+  if (!is.character(variablemoving) || length(variablemoving) != 1) {
+    stop("variablemoving must be a character string of length 1.")
+  }
+  if (!is.logical(option.check.name) || length(option.check.name) != 1) {
+    stop("option.check.name must be a TRUE/FALSE.")
+  }
+  if (!is.logical(optim.k) || length(optim.k) != 1) {
+    stop("optim.k must be a TRUE/FALSE.")
+  }
   
   list_slope <- as.list(Results_CSPsub$estimate)
   list_rs <- as.list(Results_CSPsub$r.squared)
@@ -284,7 +323,7 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
   # Define the year period
   yearneed <- yearneed#2
   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
-  rolling.temperature.data <- purrr::map_dfr(yearperiod, reformat.climate.backtothepast, 
+  rolling.data <- purrr::map_dfr(yearperiod, reformat.climate.backtothepast, 
                                       climate = climate_csv, 
                                       yearneed, 
                                       refday = refday, 
@@ -293,8 +332,9 @@ runing_csp_site = function(Results_CSPsub = Results_CSPsub,
                                       variablemoving = variablemoving)
   output_fit_summary.temp <- purrr::map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = data, 
                                                                                            window_ranges_df = window_ranges_df,
-                                                                                           rolling.temperature.data = rolling.temperature.data,
-                                                                                           myform.fin = formula('log.seed ~ mean.temperature'),
+                                                                                           rolling.data = rolling.data,
+                                                                                           myform.fin = myform.fin,
+                                                                                           model_type = model_type,
                                                                                            yearneed))
   return(output_fit_summary.temp)
   
@@ -362,5 +402,7 @@ CSP_function_site <- function(Results_CSPsub,
                   climate_csv = climate_data,
                   refday = refday,
                   lastdays = lastdays,   # Change from max(range) to lastdays
-                  rollwin = rollwin)
+                  rollwin = rollwin,
+                  myform.fin = formula('log.seed~TMEAN'),
+                  model_type = 'lm')
 }

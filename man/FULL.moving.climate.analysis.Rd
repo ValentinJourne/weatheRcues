@@ -5,11 +5,13 @@
 \title{Main Function of correlation - regression and process accross all sites}
 \usage{
 FULL.moving.climate.analysis(
-  seed.data.all = seed.data.all,
-  climate.path = climate.path,
+  seed.data.all,
+  climate.path,
   refday = 305,
-  lastdays = max(range),
-  rollwin = 1
+  lastdays = 700,
+  rollwin = 1,
+  myform = formula("log.seed ~ TMEAN"),
+  model_type = "lm"
 )
 }
 \arguments{

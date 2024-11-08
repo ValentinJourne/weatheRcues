@@ -18,8 +18,10 @@ RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 Suggests: 
     knitr,
-    rmarkdown
+    rmarkdown,
+    testthat (>= 3.0.0)
 Imports: 
+    betareg,
     broom,
     chron,
     climwin,
@@ -50,6 +52,7 @@ Imports:
     qs,
     RColorBrewer,
     rcompendium,
+    readr,
     rgdal,
     rworldmap,
     rworldxtra,
@@ -59,3 +62,4 @@ Imports:
     tidyr,
     tidyverse,
     zoo
+Config/testthat/edition: 3

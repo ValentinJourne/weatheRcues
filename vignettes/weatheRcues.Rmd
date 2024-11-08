@@ -61,17 +61,17 @@ seed_production_simulated <- june_week %>%
 head(seed_production_simulated)
 head(climate_data_simulated)
 
-climwin.output = climwin_site_days(
-        climate_data = climate_data_simulated,
-        data = seed_production_simulated,  
-        site.name = 'test',  
-        range = c(300, 0), #double check if climate is long enough (to match bio data)
-        cinterval = 'day',
-        refday = c(01, 11),  
-        optionwindows = 'absolute',  
-        climate_var = 'temp'  
-      )
-
-climwin.output
+# climwin.output = climwin_site_days(
+#         climate_data = climate_data_simulated,
+#         data = seed_production_simulated,  
+#         site.name = 'test',  
+#         range = c(300, 0), #double check if climate is long enough (to match bio data)
+#         cinterval = 'day',
+#         refday = c(01, 11),  
+#         optionwindows = 'absolute',  
+#         climate_var = 'temp'  
+#       )
+# 
+# climwin.output
 
 ```

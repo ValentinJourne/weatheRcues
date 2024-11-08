@@ -11,7 +11,8 @@ reformat.climate.backtothepast(
   refday = 274,
   lastdays = 1095,
   rollwin = 1,
-  variablemoving = "temperature.degree"
+  variablemoving = "temperature.degree",
+  align.moving = "right"
 )
 }
 \arguments{

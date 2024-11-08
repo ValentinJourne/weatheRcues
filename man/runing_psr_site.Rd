@@ -8,14 +8,14 @@ runing_psr_site(
   bio_data = bio_data,
   site = site,
   climate_csv = climate_csv,
-  tot_days = 600,
+  lastdays = 600,
   refday = 305,
   rollwin = 1,
   covariates.of.interest = "TMEAN",
+  myform.fin = formula("log.seed ~ TMEAN"),
   matrice = c(3, 1),
   knots = NULL,
   tolerancedays = 7,
-  plot = TRUE,
   yearneed = 2
 )
 }
@@ -24,7 +24,7 @@ runing_psr_site(
 
 \item{site}{A string representing the site name, which should match the \code{plotname.lon.lat} in \code{bio_data}.}
 
-\item{tot_days}{Integer specifying the total number of days to include in the analysis (default is 600).}
+\item{lastdays}{Integer specifying the total number of days to include in the analysis (default is 600).}
 
 \item{refday}{Integer representing the reference day (default is 305). This is the day from which the climate data is tracked backward.}
 
@@ -38,9 +38,9 @@ runing_psr_site(
 
 \item{tolerancedays}{Integer specifying the tolerance (in days) for identifying consecutive periods (default is 7).}
 
-\item{plot}{Logical indicating whether to plot the partial effect of the model (default is \code{TRUE}).}
-
 \item{climate.path}{A string representing the path to the climate data files (e.g., daily temperature data).}
+
+\item{plot}{Logical indicating whether to plot the partial effect of the model (default is \code{TRUE}).}
 }
 \value{
 A data frame summarizing the significant windows identified by the model. If no significant windows are found, the function returns a data frame with \code{NA} values.
@@ -63,7 +63,7 @@ climate_path <- "path_to_climate_data/"
 result <- runing_psr_site(bio_data = bio_data, 
                           site = site, 
                           climate.path = climate_path, 
-                          tot_days = 600, 
+                          lastdays = 600, 
                           refday = 305, 
                           rollwin = 1, 
                           covariates.of.interest = 'TMEAN',

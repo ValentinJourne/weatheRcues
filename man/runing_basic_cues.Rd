@@ -17,7 +17,9 @@ runing_basic_cues(
   Results_CSPsub = Results_CSPsub,
   data = data,
   variablemoving = "TMEAN",
-  yearneed = 2
+  yearneed = 2,
+  myform.fin = formula("log.seed ~ mean.temperature"),
+  model_type = "lm"
 )
 }
 \arguments{

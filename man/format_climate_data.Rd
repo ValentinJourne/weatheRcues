@@ -2,16 +2,23 @@
 % Please edit documentation in R/utils.R
 \name{format_climate_data}
 \alias{format_climate_data}
-\title{Format Climate Data}
+\title{Format Climate Data for a Specified Site}
 \usage{
-format_climate_data(site, path, scale.climate = TRUE)
+format_climate_data(
+  site = "sitename",
+  path = "D/mypath",
+  scale.climate = TRUE,
+  file_type = "qs"
+)
 }
 \arguments{
-\item{site}{Character. The site identifier used to match climate data files (e.g., "site_name").}
+\item{site}{Character. The site identifier used to match climate data files (e.g., \code{"site_name"}). Must be a single string.}
 
-\item{path}{Character. The directory path where the climate data files are stored.}
+\item{path}{Character. The directory path where the climate data files are stored. Must be a valid path as a single string.}
 
 \item{scale.climate}{Logical. Should the climate variables (\code{TMEAN}, \code{TMAX}, \code{TMIN}, \code{PRP}) be standardized? Defaults to \code{TRUE}.}
+
+\item{file_type}{Character. The file type of the climate data. Must be either \code{"qs"} or \code{"csv"}. Defaults to \code{"qs"}.}
 }
 \value{
 A \code{data.frame} containing the formatted climate data with columns:
@@ -26,24 +33,30 @@ A \code{data.frame} containing the formatted climate data with columns:
 If \code{scale.climate} is \code{TRUE}, these variables are standardized.
 }
 \description{
-This function reads climate data from a specified file path for a given site,
-applies necessary transformations and scaling, and returns the formatted data.
+This function reads climate data from a specified directory for a given site, applies necessary transformations,
+and optionally scales the climate variables. The function can read files in either \code{.qs} or \code{.csv} format.
 }
 \details{
 The function performs the following steps:
 \itemize{
-\item Reads the climate data file for the specified site using \code{qs::qread()}.
+\item Reads the climate data file for the specified site using \code{qs::qread()} for \code{.qs} files or \code{readr::read_csv()} for \code{.csv} files.
 \item Converts the \code{DATEB} field to a proper date format.
 \item Applies a transformation using the \code{foo()} function (assumed to adjust the year based on an origin date of 1949).
-\item Extracts the year and day of the year (\code{yday}) from the date.
-\item Converts temperature (\code{TMEAN}, \code{TMAX}, \code{TMIN}) and precipitation (\code{PRP}) to numeric format.
+\item Extracts the year and day of the year (\code{yday}) from the transformed date.
+\item Converts temperature (\code{TMEAN}, \code{TMAX}, \code{TMIN}) and precipitation (\code{PRP}) variables to numeric format.
 }
 
-If \code{scale.climate} is \code{TRUE}, the climate variables are standardized using \code{scale()}. The standardized values are then converted to vectors using \code{as.vector()}.
+If \code{scale.climate} is \code{TRUE}, the climate variables (\code{TMEAN}, \code{TMAX}, \code{TMIN}, \code{PRP}) are standardized using \code{scale()}.
+The standardized values are then converted to vectors using \code{as.vector()}.
 }
 \examples{
 \dontrun{
 # Format climate data for site "example_site" located at "/data/climate"
-formatted_data <- format_climate_data(site = "example_site", path = "/data/climate", scale.climate = TRUE)
+formatted_data <- format_climate_data(
+  site = "example_site", 
+  path = "/data/climate", 
+  scale.climate = TRUE, 
+  file_type = "qs"
+)
 }
 }

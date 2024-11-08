@@ -15,6 +15,8 @@ runing_csp_site(
   rollwin = 1,
   optim.k = F,
   variablemoving = "TMEAN",
+  myform.fin = formula("seed~TMEAN"),
+  model_type = "lm",
   yearneed = 2
 )
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/method_climwin.R
 \name{climwin_site_days}
 \alias{climwin_site_days}
-\title{Perform Climate Window Analysis - based on climwin R package from Bailey et al}
+\title{Perform Climate Window Analysis - based on climwin R package from Bailey et al.}
 \usage{
 climwin_site_days(
   climate_data,
@@ -14,63 +14,81 @@ climwin_site_days(
   optionwindows = "absolute",
   climate_var = "TMEAN",
   stat.aggregate = "mean",
-  formulanull = formula(log.seed ~ 1)
+  formulanull = formula("log.seed ~ 1"),
+  fun = "lin",
+  cmissing = "method2"
 )
 }
 \arguments{
-\item{data}{A data frame containing biological data including seed production and relevant metadata.
-It should include columns for \code{Date2} and \code{sitenewname}.}
+\item{climate_data}{A data frame or tibble containing climate data, with at least two columns:
+\code{date} and the climate variable specified in \code{climate_var}. This is used for climate window analysis.}
+
+\item{data}{A data frame or tibble containing biological data including seed production and relevant metadata.
+It should include a column for \code{Date2}, which represents the date of observation.}
 
 \item{site.name}{A character string specifying the name of the site for which the analysis is conducted.
 This is used to filter the climate data specific to this site.}
 
 \item{range}{A numeric vector of length 2 specifying the range of days over which to perform the sliding
-window analysis. This defines the maximum and minimun range for window lengths in days. Defaults to \code{c(600, 0)}.}
+window analysis. Defines the maximum and minimum range for window lengths in days. Defaults to \code{c(600, 0)}.}
 
 \item{cinterval}{A character string specifying the interval at which climate data is aggregated.
-Options include 'day', 'week', etc. Defaults to \code{'day'} same as climwin.}
+Options include \code{'day'}, \code{'week'}, etc. Defaults to \code{'day'} (same as climwin).}
 
 \item{refday}{A numeric vector of length 2 specifying the reference day for absolute windows.
-Defaults to \code{c(01, 11)} (e.g., November 1st) - meaning will search before 1st of November.}
+Defaults to \code{c(01, 11)} (e.g., November 1st). This means the analysis will search for windows before
+the 1st of November.}
 
-\item{optionwindows}{A character string specifying the type of window to use. Options include 'absolute'
-for fixed dates and 'relative' for relative to a specific event. Defaults to \code{'absolute'}. Relative might be useful
-if you have a specific date time event, which is not the case with our seed production data}
+\item{optionwindows}{A character string specifying the type of window to use. Options include \code{'absolute'}
+for fixed dates and \code{'relative'} for windows relative to a specific event. Defaults to \code{'absolute'}.
+Relative windows are useful if you have a specific event date for seed production.}
 
 \item{climate_var}{A character string specifying the name of the climate variable to analyze (e.g., temperature
-mean, maximum, or minimum). Defaults to \code{'TMEAN'}. But it should basically match your same column in your climate file}
+mean, maximum, or minimum). Defaults to \code{'TMEAN'} but should match the corresponding column name in the climate data.}
 
-\item{climate.path}{A character string specifying the path to the directory containing
-the climate data files. The function searches for files matching the \code{site.name} pattern in this directory.}
+\item{stat.aggregate}{A character string specifying the aggregation method for the climate variable.
+Options include \code{'mean'}, \code{'sum'}, \code{'min'}, or \code{'max'}. Defaults to \code{'mean'}.}
+
+\item{formulanull}{A formula specifying the null model for the analysis. Defaults to \code{formula('log.seed ~ 1')},
+but this should reflect the response variable in your biological data.}
+
+\item{fun}{A character string specifying the functional form used for the sliding window analysis. Defaults to \code{"lin"}.}
+
+\item{cmissing}{A character string specifying the method for handling missing climate data.
+Defaults to \code{"method2"}.}
 }
 \value{
-A data frame containing:
+A data frame containing the following:
 \itemize{
-\item \code{sitenewname}: Site-specific information.
+\item \code{sitenewname}: Site-specific information from the biological data.
 \item \code{climate.file}: Name of the climate data file used.
-\item \code{climwin_output$combos}: Results from the sliding window analysis, the output from climwin::slidingwin.
-\item Performance metrics of the best model (\code{performance::model_performance}).
+\item \code{climwin_output$combos}: Results from the sliding window analysis (\code{climwin::slidingwin}).
+\item Performance metrics of the best model (from \code{performance::model_performance}).
 \item Coefficients of the best model extracted using \code{broom::tidy}.
 }
 }
 \description{
 This function performs a climate window analysis using the \code{climwin} R package to identify
 the best temperature windows that correlate with seed production. It processes climate and
-biological data, runs a sliding window analysis, and returns statistics and windows identified
-NOTE that most parameters are already well described in climwin R package ;O
-You also need to specify your null model as reference, here
-baseline = lm(log.seed~1, data = data)
-but double check you have the proper response name variable
+biological data, runs a sliding window analysis, and returns statistics for the best windows identified.
 }
 \details{
-The function filters and processes climate data, performs a sliding window analysis using the \code{climwin} package,
-and extracts model summaries and window. The function assumes the climate data files are in a format compatible with the \code{qs}
-package (qs file are just smaller size and can be read by using qs::qread) and that the biological data contains a valid response variable as specified by \code{formulanull}.
+Note that most parameters are already well described in the climwin R package; however, this
+function also requires the specification of a null model (baseline). For example:
+\code{baseline = lm(log.seed ~ 1, data = data)}.
+Double-check that the response variable is named correctly in the formula.
+
+This function processes climate data and biological data, runs a sliding window analysis using the \code{climwin} package,
+and extracts statistics for the best climate window. The climate data files are assumed to be in a format compatible
+with the \code{qs} package (small file size, which can be read using \code{qs::qread}).
+
+The function returns a set of performance metrics for the best-fitting model and the window that corresponds to the
+best climate variables for seed production.
 }
 \examples{
 # Example usage:
 # result <- climwin_site_days(
-#   climate.path = "path/to/climate/data",
+#   climate_data = climate_data,
 #   data = biological_data,
 #   site.name = "site1"
 # )

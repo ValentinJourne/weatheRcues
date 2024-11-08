@@ -1,6 +1,4 @@
-#method to identify weather cues based on PSR method - Roberts et al studies 
-#the code is a version adapted from Simmonds et al
-
+#method to identify weather cues based on PSR method - from Roberts et al studies 
 #' Run PSR Method for Identifying Weather Cues at a Specific Site
 #'
 #' This function performs the PSR (Penalized Spline Regression) method to identify weather cues for biological data, based on the methodology from Roberts et al., and adapted from Simmonds et al. 
@@ -9,7 +7,7 @@
 #' @param bio_data A data frame containing biological data with columns such as `Year`, `plotname.lon.lat`, and `log.seed`.
 #' @param site A string representing the site name, which should match the `plotname.lon.lat` in `bio_data`.
 #' @param climate.path A string representing the path to the climate data files (e.g., daily temperature data).
-#' @param tot_days Integer specifying the total number of days to include in the analysis (default is 600).
+#' @param lastdays Integer specifying the total number of days to include in the analysis (default is 600).
 #' @param refday Integer representing the reference day (default is 305). This is the day from which the climate data is tracked backward.
 #' @param rollwin Integer representing the size of the rolling window for calculating the rolling averages (default is 1).
 #' @param covariates.of.interest A string indicating the climate variable of interest (e.g., 'TMEAN', 'TMAX', 'TMIN', 'PRP') (default is 'TMEAN').
@@ -34,7 +32,7 @@
 #' result <- runing_psr_site(bio_data = bio_data, 
 #'                           site = site, 
 #'                           climate.path = climate_path, 
-#'                           tot_days = 600, 
+#'                           lastdays = 600, 
 #'                           refday = 305, 
 #'                           rollwin = 1, 
 #'                           covariates.of.interest = 'TMEAN',
@@ -49,16 +47,50 @@
 runing_psr_site = function(bio_data = bio_data,
                            site = site,
                            climate_csv = climate_csv,
-                           tot_days = 600,
+                           lastdays = 600,
                            refday = 305,
                            rollwin = 1,
                            covariates.of.interest = 'TMEAN',
+                           myform.fin = formula('log.seed ~ TMEAN'),
                            matrice = c(3,1),
                            knots = NULL,
                            tolerancedays = 7,
-                           plot = TRUE,
+                           #plot = TRUE,
                            yearneed = 2){
   
+  if (!is.data.frame(bio_data)) {
+    stop("bio_data must be a data frame or tibble.")
+  }
+  if (!is.data.frame(climate_csv)) {
+    stop("climate_csv must be a data frame or tibble.")
+  }
+  if (!is.numeric(lastdays) || length(lastdays) != 1) {
+    stop("lastdays must be a numeric value of length 1.")
+  }
+  if (!is.numeric(refday) || length(refday) != 1) {
+    stop("refday must be a numeric value of length 1.")
+  }
+  if (!is.numeric(rollwin) || length(rollwin) != 1) {
+    stop("rollwin must be a numeric value of length 1.")
+  }
+  if (!is.character(covariates.of.interest) || length(covariates.of.interest) != 1) {
+    stop("covariates.of.interest must be a single character string.")
+  }
+  if (!is.numeric(matrice) || length(matrice) != 2) {
+    stop("matrice must be a numeric vector of length 2.")
+  }
+  if (!is.null(knots) && (!is.numeric(knots) || length(knots) == 0)) {
+    stop("knots must be NULL or a numeric vector with at least one element.")
+  }
+  if (!is.numeric(tolerancedays) || length(tolerancedays) != 1) {
+    stop("tolerancedays must be a numeric value of length 1. This arg is about how many days you will tolerate for window identification")
+  }
+  # if (!is.logical(plot) || length(plot) != 1) {
+  #   stop("plot must be a logical value of length 1 (TRUE or FALSE). This will plot the gam predictions")
+  # }
+  if (!is.numeric(yearneed) || length(yearneed) != 1) {
+    stop("yearneed must be a numeric value of length 1.")
+  }
   #just checking 
   if((site == unique(bio_data$plotname.lon.lat))==F){
     stop()
@@ -83,7 +115,7 @@ runing_psr_site = function(bio_data = bio_data,
   tempmat <- tempmat[,-1]
   #number years monitoring seeds 
   ny<-length(bio_data$year)
-  nt<-tot_days-1
+  nt<-lastdays-1
   ## Formatting data
   index.matrix=matrix(1:nt,ny,nt,byrow=TRUE)
   # Define the year period
@@ -91,24 +123,24 @@ runing_psr_site = function(bio_data = bio_data,
   #will fiter the year period here to the year needeed 
   yearperiod <- (min(climate_csv$year) + yearneed):max(climate_csv$year)
   # Apply the function across all years in yearperiod and combine results
-  rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
+  rolling.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
                                       climate = climate_csv, 
                                       yearneed = yearneed, 
                                       refday = refday, 
-                                      lastdays = tot_days, 
+                                      lastdays = lastdays, 
                                       rollwin = rollwin, 
                                       variablemoving = covariates.of.interest)
   #merge data seed to moving climate
   tible.sitelevel = bio_data %>% #site = bio_data 
     #rename(year = Year) %>% 
-    left_join(rolling.temperature.data) %>% 
-    tidyr::drop_na(!!sym('rolling_avg_tmean'))
+    left_join(rolling.data) %>% 
+    tidyr::drop_na(!!sym(covariates.of.interest))
   
   climate2 <- data.frame(year = tible.sitelevel$year, 
                          yday = tible.sitelevel$days.reversed, 
-                         temp = tible.sitelevel$rolling_avg_tmean)
+                         varOfInterst = tible.sitelevel[,covariates.of.interest])
   covariate.matrix = climate2 %>%
-    spread(key = yday, value = temp) %>%
+    spread(key = yday, value = varOfInterst) %>%
     dplyr::select(-year) %>%                    
     as.matrix()    
   covariate.matrix <- unname(as.matrix(covariate.matrix))
@@ -128,9 +160,9 @@ runing_psr_site = function(bio_data = bio_data,
                data = bio_data, method="GCV.Cp")
     summary(model)}
   
-  if(plot==TRUE){
+  #if(plot==TRUE){
     plotted <- plot(model, ylab = c('partial effect'), xlab = c('days prior response'))
-  }
+  #}
   coefs <- data.frame(fit = plotted[[1]]$fit)
   #wihtout rounding now, will provide different output, and adjust by what is in the main study . 
   upper_limit <- mean(coefs$fit) + (1.96 * sd(coefs$fit))
@@ -158,11 +190,13 @@ runing_psr_site = function(bio_data = bio_data,
     window_ranges_df <- save_window_ranges(sequences_days) %>% 
       mutate(windows.sequences.number = 1:nrow(.))
     
+    #it will use the data from roll data climate 
     output_fit_summary.psr.temp <- map_dfr(1:nrow(window_ranges_df), ~reruning_windows_modelling(.,tible.sitelevel = bio_data, 
                                                                                                  window_ranges_df = window_ranges_df,
-                                                                                                 rolling.temperature.data = rolling.temperature.data,
-                                                                                                 myform.fin = formula('log.seed ~ mean.temperature'),
-                                                                                                 yearneed = yearneed))
+                                                                                                 rolling.data  = rolling.data,
+                                                                                                 myform.fin = myform.fin,
+                                                                                                 refday = refday,
+                                                                                                 model_type = 'lm'))
     
   }
   return(output_fit_summary.psr.temp)
@@ -172,7 +206,7 @@ runing_psr_site = function(bio_data = bio_data,
 #'
 #' @param site A string representing the site name, which should match the `plotname.lon.lat` in `seed.data`.
 #' @param seed.data A data frame containing biological data (e.g., seed production) with columns such as `plotname.lon.lat`, `Year`, and `log.seed`.
-#' @param tot_days Integer specifying the total number of days to include in the analysis (default is 600).
+#' @param lastdays Integer specifying the total number of days to include in the analysis (default is 600).
 #' @param lastdays Integer specifying the final day for the analysis (usually the length of the time series).
 #' @param matrice A numeric vector of length 2 indicating the penalties to apply in the smoothing function of the model (default is `c(3,1)`).
 #' @param knots Integer specifying the number of knots for the GAM model. If `NULL` (default), the function will set the knots to the number of years minus one.
@@ -190,7 +224,7 @@ runing_psr_site = function(bio_data = bio_data,
 #' seed.data <- your_fagus_data
 #' result <- PSR_function_site(site = site,
 #'                             seed.data = seed.data,
-#'                             tot_days = 600,
+#'                             lastdays = 600,
 #'                             lastdays = 600,
 #'                             matrice = c(3,1),
 #'                             knots = NULL)
@@ -199,11 +233,13 @@ runing_psr_site = function(bio_data = bio_data,
 #' @export
 PSR_function_site <- function(site, 
                               seed.data, 
-                              tot_days,
+                              lastdays,
                               refday,
                               climate.path, 
                               matrice = c(3,1),
-                              knots = NULL) {
+                              knots = NULL,
+                              tolerancedays = 7,
+                              yearneed = 2) {
   
   # Filter the Fagus seed data by the site name
   data.sub.fagus <- seed.data %>%
@@ -220,12 +256,13 @@ PSR_function_site <- function(site,
   runing_psr_site(bio_data = data.sub.fagus,
                   site = site,
                   climate_csv = climate_data,
-                  tot_days = 600,
+                  lastdays = 600,
                   refday = refday,
                   rollwin = 1,
                   covariates.of.interest = 'TMEAN',
                   matrice = matrice,
                   knots = knots,
-                  tolerancedays = 7,
+                  yearneed = yearneed,
+                  tolerancedays = tolerancedays,
                   plot = TRUE)
 }
