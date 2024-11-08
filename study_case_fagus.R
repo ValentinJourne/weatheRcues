@@ -13,6 +13,7 @@ library(rcompendium)
 #   quiet = FALSE
 # )
 
+
 add_dependencies('.')
 devtools::load_all(here::here())
 devtools::document()
@@ -21,9 +22,11 @@ devtools::check()
 #remotes::install_deps()
 #https://frbcesab.github.io/rcompendium/articles/rcompendium.html
 library(weatheRcues)
+library(here)
+library(tidyverse)
 #https://community.rstudio.com/t/unable-to-install-packages-from-github/124372
 #Sys.unsetenv("GITHUB_PAT")
-library(tidyverse)
+
 library(climwin)
 library(broom)
 library(mgcv)
@@ -37,8 +40,8 @@ library(ggspatial)
 library(ggsci)
 library(patchwork)
 
-functions <- list.files(here("fun"), full.names = T) %>%
-  purrr::map(source)
+#functions <- list.files(here("fun"), full.names = T) %>%
+#  purrr::map(source)
 
 
 
@@ -91,7 +94,9 @@ Fagus.seed = initial.data.mastree %>%
   group_by(sitenewname) %>% 
   mutate(log.seed = log(1+Value),
          scale.seed = scale(Value),
-         n = n()) %>% 
+         n = n(),
+         scaling01 = (Value - min(Value, na.rm = T))/(max(Value)-min(Value, na.rm = T)),
+         scalingbeta = y.transf.betareg(scaling01)) %>% 
   filter(n > 19) %>% #initially 14
   mutate() %>% 
   mutate(Date = paste0( "15/06/",Year)) %>% 
@@ -102,7 +107,9 @@ Fagus.seed = initial.data.mastree %>%
   as.data.frame()
 
 #get the mothod collection
-methods.collection.mv2 = Fagus.seed %>% dplyr::select(sitenewname, Country, Collection_method, Length) %>% distinct()
+methods.collection.mv2 = Fagus.seed %>% 
+  dplyr::select(sitenewname, Country, Collection_method, Length) %>% 
+  distinct()
 
 
 seed.production.plot = Fagus.seed %>% 
@@ -182,31 +189,33 @@ beech.site.all = unique(Fagus.seed$plotname.lon.lat)
 # Define a function to process each site
 #I want the function to work only for one site
 #option to run in parallel to make it faster (faster than map_dfr, but need double checking because if not well defined = issues)
-run.climwin <-F
+run.climwin <-T
 #take some time ! more than 1 h 
 if(run.climwin==T){
   library(furrr)#make it in parallele, https://cran.r-project.org/web/packages/future/vignettes/future-1-overview.html
-  plan(multisession)#background R sessions (on current machine) , the computer is flying (alt cluster)
-  
+  #plan(sequential)#change from multisession because of issues , and it came from the data vector.. so better using sequential and got issue with qs argument
+  plan(multisession)
+
   statistics_absolute_climwin <- future_map_dfr(
     beech.site.all, 
     ~ {
+      library(weatheRcues)
       # format the climate, .x is the current site
-      climate_data <- format_climate_data(site = .x ,
+      climate_data <-  weatheRcues:::format_climate_data(site = .x ,
                                           path = climate.beech.path, 
-                                          scale.climate = T)  
+                                          scale.climate = TRUE)  
       # Run climwin per site
-      climwin_site_days(
+      weatheRcues::climwin_site_days(
         climate_data = climate_data,
         data = Fagus.seed %>% filter(plotname.lon.lat == .x),  
         site.name = .x,  
         range = range,
         cinterval = 'day',
         refday = c(01, 11),  
-        optionwindows = 'absolute',  
-        climate_var = 'TMEAN'  
-      )
-    }
+        optionwindows = "absolute",
+        climate_var = "TMEAN")
+    },
+    .options = furrr_options(seed = TRUE)#setting the seed across the parallel workers.
   )
   
 qs::qsave(statistics_absolute_climwin, 
@@ -215,14 +224,14 @@ qs::qsave(statistics_absolute_climwin,
             }
 
 
-mean(statistics_absolute_climwin$WindowOpen)
-mean(statistics_absolute_climwin$WindowClose)
+mean(statistics_absolute_climwin$window.open)
+mean(statistics_absolute_climwin$window.close)
 #159-427
 
 
 climwin.dd = statistics_absolute_climwin %>% 
-  dplyr::select(sitenewname, WindowOpen, WindowClose) %>% 
-  pivot_longer(WindowOpen:WindowClose, values_to = 'days.reversed') %>% 
+  dplyr::select(sitenewname, window.open, window.close) %>% 
+  pivot_longer(window.open:window.close, values_to = 'days.reversed') %>% 
   left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed)) 
 
 
@@ -233,7 +242,7 @@ climwin.all.sites = climwin.dd %>% dplyr::select(sitenewname, name, days.reverse
   #arrange(Collection_method) %>% 
   mutate(sitenewname = fct_reorder(sitenewname, Collection_method)) %>%
 ggplot()+
-  geom_segment(aes(y = WindowOpen, yend = WindowClose, x = sitenewname, col = Collection_method), size = 2) +
+  geom_segment(aes(y = window.open, yend = window.close, x = sitenewname, col = Collection_method), size = 2) +
   coord_flip()+
   geom_hline(yintercept = 133, color = 'black', linetype = 'dashed')+
   geom_hline(yintercept = 498, color = 'black', linetype = 'dashed')+
@@ -247,17 +256,20 @@ ggplot()+
 cowplot::save_plot(here("figures/FigureS1.png"),climwin.all.sites, ncol = 1.5, nrow = 1.8, dpi = 300)
 
   
-quibble2(statistics_absolute_climwin$WindowOpen, q = c(0.25, 0.5, 0.75))
-quibble2(statistics_absolute_climwin$WindowClose, q = c(0.25, 0.5, 0.75))
+quibble2(statistics_absolute_climwin$window.open, q = c(0.25, 0.5, 0.75))
+quibble2(statistics_absolute_climwin$window.close, q = c(0.25, 0.5, 0.75))
 
 
 
 #it is still useful for me because here I will also work with simple correlation later 
-results.moving.site = FULL.moving.climate.analysis(seed.data = Fagus.seed,
+results.moving.site = FULL.moving.climate.analysis(seed.data.all = Fagus.seed,
                              climate.path = climate.beech.path,
                              refday = 305,
                              lastdays = max(range),
-                             rollwin = 1)
+                             rollwin = 1,
+                             myform = formula('log.seed ~ TMEAN'),
+                             model_type = 'lm')
+
 
 #create 50 list - 1 per site 
 Results_daily = results.moving.site %>%
@@ -348,31 +360,17 @@ statistics_psr_method = map_dfr(
     site = .x,
     climate.path = climate.beech.path,
     seed.data = Fagus.seed,  # Use .x correctly here
-    tot_days = max(range),
+    lastdays = max(range),
     matrice = c(3,1),
     refday = 305,
-    knots = NULL
+    knots = NULL,
+    tolerancedays = 7
   )
 )
 
+qs::qsave(statistics_psr_method, 
+          here('outputs/statistics_psr.qs'))
 
-
-ggplot(statistics_psr_method %>% 
-         group_by(sitenewname) %>% 
-         slice(which.max(r2)))+
-  geom_segment(aes(y = window.open, yend = window.close, x = sitenewname), size = 2) +
-  geom_point(aes(y = window.open, x = sitenewname), size = 2) +
-  coord_flip()+
-  geom_hline(yintercept = 133, color = 'black', linetype = 'dashed')+
-  geom_hline(yintercept = 498, color = 'black', linetype = 'dashed')+
-  ylim(0,600)+
-  scale_color_brewer(palette = "Dark2")+
-  scale_fill_brewer(palette = "Dark2")+
-  scale_color_futurama()+
-  scale_fill_futurama()+
-  ggpubr::theme_cleveland()+
-  theme(legend.position = 'bottom', legend.title = element_blank())+
-  ylab('Days reversed')
 
 output_fit_summary.psr.best = statistics_psr_method  %>% 
   group_by(sitenewname) %>% 
@@ -423,6 +421,9 @@ statistics_basic_method = map_dfr(
   ))
 
 
+qs::qsave(statistics_basic_method, 
+          here('outputs/statistics_basic.qs'))
+
 output_fit_summary.basic.best = statistics_basic_method  %>% 
   group_by(sitenewname) %>% 
   slice(which.max(r2))%>% 
@@ -458,8 +459,7 @@ windows.avg = output_fit_summary.basic.best %>%
               dplyr::select(sitenewname, window.open, window.close) %>% 
               mutate(method = 'P-spline regression')) %>% 
   bind_rows(statistics_absolute_climwin %>% 
-              dplyr::select(sitenewname, WindowOpen, WindowClose) %>% rename(window.open = WindowOpen,
-                                                                             window.close = WindowClose) %>% 
+              dplyr::select(sitenewname, window.open, window.close) %>% 
               mutate(method = 'Sliding time window')) %>% 
   bind_rows(output_fit_summary.best.csp %>% 
               dplyr::select(sitenewname, window.open , window.close) %>% 
@@ -552,6 +552,8 @@ cowplot::save_plot(here("figures/averager2.method.png"),averagedensr2method+medi
 num_blocks <- 5
 test_block_nb = 2
 num_iterations <- 10  # Specify the number of iterations
+#I saved them both (part 1 and part2) just to check if it is working properly
+output_fit_summary_cv_fin_part1 = NULL
 output_fit_summary_cv_fin_part2 = NULL
 # Loop through each site
 save.bc = TRUE
@@ -592,23 +594,23 @@ for(i in 1:length(beech.site.all)) {
     psr1 <- runing_psr_site(bio_data = train_blocks,
                             site = beech.site.all[i],
                             climate_csv = climate_data,
-                            tot_days = 600,
+                            lastdays = max(range),
                             refday = refday,
                             rollwin = 1,
                             covariates.of.interest = 'TMEAN',
                             matrice = c(3, 1),
                             knots = NULL,
-                            tolerancedays = 7,
-                            plot = TRUE) %>% 
+                            tolerancedays = 7) %>% 
       dplyr::slice(which.max(r2)) %>% 
       dplyr::mutate(method = 'psr')
     
     moving.site1 <- site.moving.climate.analysis(
       bio_data = train_blocks, 
-      climate.data = climate_data, 
+      climate_data = climate_data, 
       lastdays = lastdays,
       refday = 305,
-      myform = formula('log.seed ~ rolling_avg_tmean')
+      myform = formula('log.seed ~ TMEAN'),
+      model_type = 'lm'
     )
     
     csp1 <- runing_csp_site(Results_CSPsub = moving.site1,
@@ -619,6 +621,9 @@ for(i in 1:length(beech.site.all)) {
                             refday = 305,
                             lastdays = max(range),
                             rollwin = 1,
+                            variablemoving = 'TMEAN',
+                            myform.fin = formula('log.seed ~ TMEAN'),
+                            model_type = 'lm',
                             optim.k = F) %>% 
       dplyr::slice(which.max(r2)) %>% 
       dplyr::mutate(method = 'csp')
@@ -633,6 +638,8 @@ for(i in 1:length(beech.site.all)) {
                                 siteforsub = beech.site.all[i],
                                 climate_csv = climate_data,
                                 Results_CSPsub = moving.site1,
+                                myform.fin=formula('log.seed ~ TMEAN'),
+                                model_type = 'lm',
                                 data = train_blocks) %>% 
       dplyr::slice(which.max(r2)) %>% 
       dplyr::mutate(method = 'signal')
@@ -646,7 +653,7 @@ for(i in 1:length(beech.site.all)) {
     yearperiod <- (min(climate_data$year) + yearneed):max(climate_data$year)
     
     # Apply the function across all years in yearperiod and combine results
-    rolling.temperature.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
+    rolling.data <- map_dfr(yearperiod, reformat.climate.backtothepast, 
                                         climate = climate_data, 
                                         yearneed = yearneed, 
                                         refday = refday, 
@@ -656,15 +663,15 @@ for(i in 1:length(beech.site.all)) {
     
     output_fit_summary.temp <- purrr::map_dfr(1:nrow(temp.win), ~cross_validation_outputs_windows_modelling(., tible.sitelevel = validation_blocks, 
                                                                                             window_ranges_df = temp.win,
-                                                                                            rolling.temperature.data = rolling.temperature.data,
-                                                                                            myform.fin = formula('log.seed ~ mean.temperature'))) 
+                                                                                            rolling.data = rolling.data,
+                                                                                            myform.fin = formula('log.seed ~ TMEAN'))) 
     
     output_fit_summary_cv_fin_part1 <- bind_rows(output_fit_summary_cv_fin_part1, output_fit_summary.temp)
   }
   output_fit_summary_cv_fin_part2 = bind_rows(output_fit_summary_cv_fin_part2, output_fit_summary_cv_fin_part1)
 }
 if(save.bc == T){
-  qs::qsave(output_fit_summary_cv_fin_part2, here(paste0('outputs/outputs_blockcrosstotal_',num_blocks,'_train_',test_block_nb,'.qs' )))
+  qs::qsave(output_fit_summary_cv_fin_part2, here(paste0('outputs/outputs_blockcrosstotalv2_',num_blocks,'_train_',test_block_nb,'.qs' )))
 }
 #qs::qsave(output_fit_summary_cv_fin_part2, here('outputs/output_fit_summary_cv_fin_part2.qs' ))
 
@@ -717,7 +724,7 @@ cowplot::save_plot(here("figures/Figure.block.png"),block.cross.figure, ncol = 1
 ##############################################################################
 #######################
 #now test the frac dataset 
-#take more than 10 hours if 10 iteration (climwin takes some times)
+#take more than 12 hours if 10 iteration (climwin takes some times)
 # Initialize a list to store all results
 result_list_all <- list()
 
