@@ -61,27 +61,25 @@ vignette.
 
 ## Long-form documentations
 
-`weatheRcues` provides **{{ NUMBER OF VIGNETTES }}** vignettes to learn
-more about the package:
+`weatheRcues` provides for now one vignette to learn more about the package:
 
-- the [Get
-  started](https://ValentinJourne.github.io/weatheRcues/articles/weatheRcues.html)
-  vignette describes the core features of the package
-- **{{ LIST ADDITIONAL VIGNETTES }}**
+- the [Get started](https://ValentinJourne.github.io/weatheRcues/articles/weatheRcues.html)
+vignette describes the core features of the package. Additional information about the methods can be found in Journé et al (in prep)
 
 ## Citation
 
-Please cite `weatheRcues` as:
+Please cite `weatheRcues` as: 
 
-> Journé Valentin (2024) weatheRcues: An R package to **{{ TITLE }}**. R
-> package version 0.0.0.9000.
-> <https://github.com/ValentinJourne/weatheRcues/>
+> Journé Valentin (`r format(Sys.Date(), "%Y")`) weatheRcues: a companion to identify weather cues in seed production. R package version 0.0.0.9000. 
+<https://github.com/ValentinJourne/weatheRcues/>
+
+And for the main study reference as: 
+
+> Journé Valentin, Emily G. Simmonds, Maciej Barczyk, Michał Bogdziewicz (`r format(Sys.Date(), "%Y")`) What is the best method to identify weather cues in forest tree reproduction?
 
 ## Contributing
 
-This code is mostly based on previous code, study, etc. Feel free to
-adjust the code as you want. In case you have any question, please
-contact us.
+This code is mostly based on previous code, studies, etc (see Journé et al, in prep for more details). Feel free to adjust the code as you want, and do the test you wish. In case you have any question, please contact us. 
 
 ## Acknowledgments
 
@@ -91,4 +89,10 @@ useful information related to code implementation.
 
 ## References
 
-**{{ To add }}**
+Bailey, L.D. & De Pol, M.V. (2016). Climwin: An R Toolbox for Climate Window Analysis. PLoS ONE.
+
+Roberts, A.M. (2008). Exploring relationships between phenological and weather data using smoothing.International Journal of Biometeorology. 
+
+Thackeray, S.J., Henrys, P.A., Hemming, D., Bell, J.R., Botham, M.S., Burthe, S. et al. (2016). Phenological sensitivity to climate across taxa and trophic levels. Nature.
+
+Simmonds, E.G., Cole, E.F. & Sheldon, B.C. (2019). Cue identification in phenology: A case study of the predictive performance of current statistical tools. Journal of Animal Ecology.
