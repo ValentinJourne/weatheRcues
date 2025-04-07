@@ -70,7 +70,7 @@ climwin_site_days <- function(climate_data,
                               optionwindows = 'absolute',
                               climate_var = 'TMEAN',
                               stat.aggregate = 'mean',
-                              formulanull = formula('log.seed ~ 1'),
+                              formulanull = stats::formula('log.seed ~ 1'),
                               fun = "lin",
                               cmissing = 'method2') {
   # Test function at the beginning for input validation
@@ -116,6 +116,29 @@ climwin_site_days <- function(climate_data,
   # Run the test function
   test_inputs()
   
+  # Extract the response variable from the formula
+  response.drop.na <- strsplit(as.character(as.formula(formulanull))[2], " ~ ")[[1]][1]
+  
+  # Debugging: Print the response variable and check if it exists in the data
+  print(paste("Response variable:", response.drop.na))
+  if (!response.drop.na %in% names(data)) {
+    stop(paste("Response variable", response.drop.na, "not found in the data"))
+  }
+  
+  # Filter the data to remove rows with NA in the response variable
+  # data.ana <- data %>% 
+  #   tidyr::drop_na(!!sym(response.drop.na))
+  # 
+  # # Debugging: Print the filtered data
+  # print(paste("Number of rows in data.ana:", nrow(data.ana)))
+  # if (nrow(data.ana) == 0) {
+  #   stop("No rows remaining in data.ana after filtering. Check for missing values in the response variable.")
+  # }
+  
+  # Debugging: Print the first few rows of data.ana
+  #print("First few rows of data.ana:")
+  #print(head(data.ana))
+  
   #print val 
   print(paste("range:", range))
   print(paste("cinterval:", cinterval))
@@ -124,17 +147,13 @@ climwin_site_days <- function(climate_data,
   print(paste("windows option:", optionwindows))
   print(paste("variable of interest:", climate_var))
   
-  # Load the biological data for the site
-  response.drop.na = strsplit(as.character(formulanull)[2], " ~ ")[[1]][1]
-  data.ana = data  %>% 
-    tidyr::drop_na(!!sym(response.drop.na))
   
   # Run the climwin analysis
   climwin_output <- climwin::slidingwin(
     xvar = list(temperature.degree = climate_data[[climate_var]]),
     cdate = climate_data$date,
-    bdate = data.ana$Date2,
-    baseline = lm(as.formula((formulanull)), data = data.ana),#i Needed to specify the formula here, if not it is not working properly (with future_map)
+    bdate = data$Date2,
+    baseline = lm(log.seed~1, data = data),#eval(formulanull); i Needed to specify the formula here, if not it is not working properly (with future_map)
     cinterval = cinterval,
     range = range,
     type = optionwindows,
@@ -157,7 +176,7 @@ climwin_site_days <- function(climate_data,
   
   # Extract performance statistics and combine with site information
   statistics <- dplyr::bind_cols(
-    sitenewname = unique(data.ana$sitenewname),
+    sitenewname = unique(data$sitenewname),
     climate.file = site.name,
     climwin_output$combos, # Extract statistics for all variants
     performance::model_performance(climwin_output[[1]]$BestModel) %>% as.data.frame(),
@@ -168,7 +187,7 @@ climwin_site_days <- function(climate_data,
     dplyr::rename(window.open = WindowOpen,
                   window.close = WindowClose) %>% 
     dplyr::mutate(window.open = window.open, #a checker, mais je crois que climwin start vector at 0, and me at 1, so maybe need to add +1 
-           window.close = window.close)
+                  window.close = window.close)
   
   return(statistics)
 }
