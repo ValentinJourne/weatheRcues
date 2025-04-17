@@ -217,6 +217,7 @@ climwin_site_days <- function(
       climate.file = site.name,
       climwin_output$combos, # Extract statistics for all variants
       performance::model_performance(climwin_output[[1]]$BestModel) %>%
+        dplyr::rename(r2 = R2) %>%
         as.data.frame(),
       broom_summary_slope,
       broom_summary_intercept,

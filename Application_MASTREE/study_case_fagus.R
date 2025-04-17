@@ -952,39 +952,6 @@ cowplot::save_plot(
 #now test the frac dataset
 #take more than 12 hours if 10 iteration (climwin takes some times)
 # Initialize a list to store all results
-result_list_all <- list()
-
-# Define the sample fractions you want to iterate over
-#fractions <- c(0.3, 0.5, 0.7, 0.9)
-years_to_extract <- c(5, 10, 15, 20)
-# Define the number of iterations for each fraction
-n_iter <- 10 #take > 12 and < 24 hours on mac os
-
-# Outer loop to iterate over the fractions
-for (num_years in years_to_extract) {
-  # Initialize a list to store results for each fraction
-  result_list <- list()
-
-  # Inner loop to perform the operation multiple times for the given fraction
-  for (i in 1:n_iter) {
-    # Get the sample list for the given fraction
-    sample_result <- run_sampling_fraction_all_methods(
-      years_to_extract = num_years,
-      range = range,
-      Fagus.seed = Fagus.seed,
-      beech.site.all = beech.site.all,
-      climate.path = climate.beech.path,
-    )
-
-    # Append this sample's results to the overall list for this fraction
-    result_list[[i]] <- sample_result
-  }
-
-  # Store the results for this fraction in the overall list, using the fraction as the key
-  result_list_all[[paste0("years_", num_years)]] <- result_list
-}
-
-
 #updated here 2025 feb
 #take few hours for one iteration
 #do this only to the longest time series, more than 50 years of observations
@@ -995,28 +962,32 @@ beech.site.subset.longterm = Fagus.seed %>%
   distinct() %>%
   as.matrix()
 
-sample_result = run_sampling_fraction_all_methods(
-  years_to_extract = c(5),
-  range,
-  Fagus.seed = subset.long.term,
-  beech.site.all = beech.site.subset.longterm,
-  climate.path = climate.beech.path
-)
+n_iter <- 10
+result_list <- list()
+for (i in 1:n_iter) {
+  sample_result = run_sampling_fraction_all_methods(
+    years_to_extract = c(5, 10, 15, 20),
+    range,
+    Fagus.seed = subset.long.term,
+    beech.site.all = beech.site.subset.longterm,
+    climate.path = climate.beech.path
+  )
+  merged_df <- imap_dfr(sample_result, function(sublist, name) {
+    bind_rows(lapply(sublist, function(df) {
+      df %>% mutate(source = name) # Add column with list name
+    }))
+  })
+  result_list[[i]] <- merged_df
+  #result_list_all[[paste0("iteration_", i)]] <- result_list
+}
 
-sample_result = results_all_years
-#qs::qsave(sample_result, "sample_result.qs")
+#qs::qsave(result_list, "year.selection.testing.qs")
 
-merged_df <- imap_dfr(sample_result, function(sublist, name) {
-  bind_rows(lapply(sublist, function(df) {
-    df %>% mutate(source = name) # Add column with list name
-  }))
-})
-
-
-summary.sample.size = merged_df %>%
+summary.sample.size = result_list %>%
+  bind_rows() %>%
   group_by(method, source, sitenewname) %>%
   mutate(
-    r2_highest = ifelse(method %in% c('csp', 'psr', 'signal'), r2 == max(r2), T)
+    r2_highest = ifelse(method %in% c('csp', 'psr', 'signal'), r2 == max(r2), T) #because it gave us all R2
   ) %>%
   dplyr::filter(r2_highest) %>%
   mutate(
