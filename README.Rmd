@@ -43,7 +43,7 @@ The R code `weatheRcues` was developed to make comparison of weather cues method
 
 ## Features
 
-The main purpose of `weatheRcues` is to compare different methods to identify weather cues; i.e. what triggers or inhibitors of seed production.
+The main purpose of `weatheRcues` is to compare different methods to identify weather cues; i.e. what triggers or inhibitors of seed production. Note here that we developped this R compendium, but feel free to adjust the code for other variable you would be interested in, such as tree ring, phenology data, etc.
 
 
 ## Installation
