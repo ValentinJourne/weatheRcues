@@ -20,8 +20,8 @@
 #' vec_with_na <- c(NA, 2, 3, 4, 5)
 #' get.mean.sd(vec_with_na) # returns c(3.5, 1.290994)
 #'
-get.mean.sd = function(vector){
-  o.mean = mean(vector)
-  o.sd = sd(vector)
-  c(o.mean,o.sd)
+get.mean.sd = function(vector) {
+  o.mean = mean(vector, na.rm = T)
+  o.sd = sd(vector, na.rm = T)
+  c(o.mean, o.sd)
 }

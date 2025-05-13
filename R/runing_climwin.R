@@ -1,70 +1,52 @@
-#' Perform Climate Window Analysis - based on climwin R package from Bailey et al.
+#' Run Climate Window Analysis (based on `climwin`)
 #'
-#' This function performs a climate window analysis using the `climwin` R package to identify
-#' the best temperature windows that correlate with seed production. It processes climate and
-#' biological data, runs a sliding window analysis, and returns statistics for the best windows identified.
+#' This function performs a climate window analysis using the `climwin` package to identify
+#' the optimal climate window (i.e., period of influence) that best explains variations in a biological response variable,
+#' typically seed production. The analysis uses a sliding window approach to correlate climate variables with biological observations.
 #'
-#' Note that most parameters are already well described in the climwin R package; however, this
-#' function also requires the specification of a null model (baseline). For example:
-#' \code{baseline = lm(log.seed ~ 1, data = data)}.
-#' Double-check that the response variable is named correctly in the formula.
+#' @param climate_data A data frame or tibble containing climate data. Must include a `date` column and a column matching the name provided in `climate_var` (e.g., `"TMEAN"`).
+#' @param bio_data A data frame or tibble containing biological data, including a `Date2` column (date of biological observation) and the response variable used in `formulanull`.
+#' @param site.name A character string used to label the output (e.g., the name or ID of the site being analyzed).
+#' @param range A numeric vector of length two indicating the maximum and minimum time before the reference date (in days) over which to search for climate windows. Default is `c(600, 0)`.
+#' @param cinterval The interval over which to aggregate the climate variable. Options include `"day"`, `"week"`, etc. Default is `"day"`.
+#' @param refday Either a numeric DOY (e.g., `305` for November 1) or a vector of day and month (e.g., `c(1, 11)` for November 1). This sets the reference date for `absolute` windows.
+#' @param optionwindows One of `"absolute"` or `"relative"`. `"absolute"` windows are fixed in time (e.g., fixed season), while `"relative"` windows move with the biological event. Default is `"absolute"`.
+#' @param climate_var Name of the column in `climate_data` containing the climate variable of interest (e.g., `"TMEAN"`). Default is `"TMEAN"`.
+#' @param stat.aggregate Aggregation function to apply within the window. One of `"mean"`, `"sum"`, `"min"`, or `"max"`. Default is `"mean"`.
+#' @param formulanull A formula specifying the null model (e.g., `log.seed ~ 1`). Must match a column in `bio_data`. Default is `log.seed ~ 1`.
+#' @param fun Functional form used to test the climate effect. Common values are `"lin"` (linear), `"quad"` (quadratic), etc. Default is `"lin"`.
+#' @param cmissing Method for handling missing climate data. See `climwin::slidingwin()` documentation. Default is `"method2"`.
+#' @param give.clean Logical. If `TRUE`, returns a cleaned summary of results including slope, intercept, R², AIC, and window bounds. If `FALSE`, returns the full output from `climwin::slidingwin()`. Default is `TRUE`.
 #'
-#' @param climate_data A data frame or tibble containing climate data, with at least two columns:
-#' \code{date} and the climate variable specified in \code{climate_var}. This is used for climate window analysis.
-#' @param data A data frame or tibble containing biological data including seed production and relevant metadata.
-#' It should include a column for \code{Date2}, which represents the date of observation.
-#' @param site.name A character string specifying the name of the site for which the analysis is conducted.
-#' This is used to filter the climate data specific to this site.
-#' @param range A numeric vector of length 2 specifying the range of days over which to perform the sliding
-#' window analysis. Defines the maximum and minimum range for window lengths in days. Defaults to \code{c(600, 0)}.
-#' @param cinterval A character string specifying the interval at which climate data is aggregated.
-#' Options include \code{'day'}, \code{'week'}, etc. Defaults to \code{'day'} (same as climwin).
-#' @param refday A numeric vector of length 2 specifying the reference day for absolute windows.
-#' Defaults to \code{c(01, 11)} (e.g., November 1st). This means the analysis will search for windows before
-#' the 1st of November.
-#' @param optionwindows A character string specifying the type of window to use. Options include \code{'absolute'}
-#' for fixed dates and \code{'relative'} for windows relative to a specific event. Defaults to \code{'absolute'}.
-#' Relative windows are useful if you have a specific event date for seed production.
-#' @param climate_var A character string specifying the name of the climate variable to analyze (e.g., temperature
-#' mean, maximum, or minimum). Defaults to \code{'TMEAN'} but should match the corresponding column name in the climate data.
-#' @param stat.aggregate A character string specifying the aggregation method for the climate variable.
-#' Options include \code{'mean'}, \code{'sum'}, \code{'min'}, or \code{'max'}. Defaults to \code{'mean'}.
-#' @param formulanull A formula specifying the null model for the analysis. Defaults to \code{formula('log.seed ~ 1')},
-#' but this should reflect the response variable in your biological data.
-#' @param fun A character string specifying the functional form used for the sliding window analysis. Defaults to \code{"lin"}.
-#' @param cmissing A character string specifying the method for handling missing climate data.
-#' Defaults to \code{"method2"}.
-#'
-#' @details
-#' This function processes climate data and biological data, runs a sliding window analysis using the `climwin` package,
-#' and extracts statistics for the best climate window. The climate data files are assumed to be in a format compatible
-#' with the `qs` package (small file size, which can be read using `qs::qread`).
-#'
-#' The function returns a set of performance metrics for the best-fitting model and the window that corresponds to the
-#' best climate variables for seed production.
-#'
-#' @return A data frame containing the following:
+#' @return A data frame containing the best-fit window statistics:
 #' \itemize{
-#'   \item \code{sitenewname}: Site-specific information from the biological data.
-#'   \item \code{climate.file}: Name of the climate data file used.
-#'   \item \code{climwin_output$combos}: Results from the sliding window analysis (\code{climwin::slidingwin}).
-#'   \item Performance metrics of the best model (from \code{performance::model_performance}).
-#'   \item Coefficients of the best model extracted using \code{broom::tidy}.
+#'   \item \code{sitenewname}: Site label from `bio_data`
+#'   \item \code{climate.file}: Site name provided to `site.name`
+#'   \item \code{window.open}, \code{window.close}: Days before the reference date indicating the climate window
+#'   \item \code{r2}, \code{AIC}: Performance metrics for the best-fit model
+#'   \item \code{slope.estimate}, \code{intercept.estimate}: Coefficient summaries from the best-fit model
+#'   \item \code{sigma}: Model residual standard deviation
 #' }
 #'
-#' @examples
-#' # Example usage:
-#' # result <- climwin_site_days(
-#' #   climate_data = climate_data,
-#' #   data = biological_data,
-#' #   site.name = "site1"
-#' # )
+#' @details
+#' This function is a wrapper around `climwin::slidingwin()` with additional input checks and a standardized output format.
+#' It is intended for automated analysis across multiple sites or datasets. The `refday` input supports both numeric DOY and day-month vector formats.
 #'
+#' @examples
+#' \dontrun{
+#' result <- runing_climwin_site(
+#'   climate_data = my_climate,
+#'   bio_data = my_seeds,
+#'   site.name = "site1"
+#' )
+#' }
+#'
+#' @importFrom dplyr %>%
 #' @export
-climwin_site_days <- function(
+runing_climwin <- function(
   ...,
   climate_data,
-  data,
+  bio_data,
   site.name, #character will be added in the final form file
   range = c(600, 0),
   cinterval = 'day',
@@ -75,7 +57,7 @@ climwin_site_days <- function(
   formulanull = stats::formula('log.seed ~ 1'),
   fun = "lin",
   cmissing = 'method2',
-  give.clean = T
+  give.clean = TRUE
 ) {
   # Test function at the beginning for input validation
   test_inputs <- function() {
@@ -86,8 +68,8 @@ climwin_site_days <- function(
     ) {
       stop("climate_data must be a data frame or a tibble")
     }
-    if (!(inherits(data, "data.frame") || inherits(data, "tbl_df"))) {
-      stop("data (your bio dataset) must be a data frame or a tibble")
+    if (!(inherits(bio_data, "data.frame") || inherits(bio_data, "tbl_df"))) {
+      stop("bio_data (your bio dataset) must be a data frame or a tibble")
     }
     # Check that site.name is a character
     if (!is.character(site.name) || length(site.name) != 1) {
@@ -104,7 +86,8 @@ climwin_site_days <- function(
     }
 
     # Check that data has required columns
-    if (!"Date2" %in% names(data)) stop("data must contain a 'Date2' column")
+    if (!"Date2" %in% names(bio_data))
+      stop("bio_data must contain a 'Date2' column")
 
     # Check that range, refday are correctly specified
     if (!is.numeric(range) || length(range) != 2)
@@ -130,9 +113,9 @@ climwin_site_days <- function(
       stop(
         "Your climate file seems to be not in the good shape. Please double check"
       )
-    if (nrow(data) == 0)
+    if (nrow(bio_data) == 0)
       stop(
-        "Your bio data file seems to be not in the good shape. Please double check"
+        "Your bio_data file seems to be not in the good shape. Please double check"
       )
   }
 
@@ -147,8 +130,12 @@ climwin_site_days <- function(
 
   # Debugging: Print the response variable and check if it exists in the data
   print(paste("Response variable:", response.drop.na))
-  if (!response.drop.na %in% names(data)) {
-    stop(paste("Response variable", response.drop.na, "not found in the data"))
+  if (!response.drop.na %in% names(bio_data)) {
+    stop(paste(
+      "Response variable",
+      response.drop.na,
+      "not found in the bio_data"
+    ))
   }
 
   # Filter the data to remove rows with NA in the response variable
@@ -176,7 +163,7 @@ climwin_site_days <- function(
   #formula <- as.formula(formulanull) #this one is not working, need dynamic one by using eval and subsitute
   model_formula <- formulanull
   model_base <- eval(substitute(
-    lm(formula.here, data = data),
+    lm(formula.here, data = bio_data),
     list(formula.here = model_formula)
   ))
 
@@ -184,7 +171,7 @@ climwin_site_days <- function(
   climwin_output <- climwin::slidingwin(
     xvar = list(temperature.degree = climate_data[[climate_var]]),
     cdate = climate_data$date,
-    bdate = data$Date2,
+    bdate = bio_data$Date2,
     baseline = model_base, #eval(formulanull); i Needed to specify the formula here, if not it is not working properly (with future_map)
     cinterval = cinterval,
     range = range,
@@ -196,7 +183,7 @@ climwin_site_days <- function(
   )
 
   # Extract the summary for the best model
-  if (give.clean == T) {
+  if (give.clean == TRUE) {
     broom_summary_slope <- broom::tidy(climwin_output[[1]]$BestModel) %>%
       dplyr::filter(term == 'climate') %>%
       dplyr::select(-term) %>%
@@ -213,21 +200,24 @@ climwin_site_days <- function(
 
     # Extract performance statistics and combine with site information
     statistics <- dplyr::bind_cols(
-      sitenewname = unique(data$sitenewname),
+      sitenewname = unique(bio_data$sitenewname),
       climate.file = site.name,
       climwin_output$combos, # Extract statistics for all variants
       performance::model_performance(climwin_output[[1]]$BestModel) %>%
-        dplyr::rename(r2 = R2) %>%
         as.data.frame(),
       broom_summary_slope,
       broom_summary_intercept,
       sigma = sigma.model
     ) %>%
-      dplyr::rename(window.open = WindowOpen, window.close = WindowClose) %>%
-      dplyr::mutate(
-        window.open = window.open, #a checker, mais je crois que climwin start vector at 0, and me at 1, so maybe need to add +1
-        window.close = window.close
-      )
+      dplyr::rename(
+        window.open = WindowOpen,
+        window.close = WindowClose,
+        r2 = R2
+      ) #%>%
+    #dplyr::mutate(
+    #  window.open = window.open, #a checker, mais je crois que climwin start vector at 0, and me at 1, so maybe need to add +1
+    #  window.close = window.close
+    #)
   } else {
     #give output from climwin directly
     statistics = climwin_output

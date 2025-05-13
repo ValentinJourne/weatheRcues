@@ -2,10 +2,10 @@
 #'
 #' This function applies the `runing_basic_cues` method to analyze climate and seed data for a specific site. It identifies weather cues based on the provided results from a CSP analysis and climate data for the site.
 #'
-#' @param Results_CSPsub A data frame containing the results of the CSP method for the site, including slope and R-squared values.
+#' @param Results_days A data frame containing the results method for the site, including slope and R-squared values.
 #' @param siteforsub String. The unique identifier for the site (e.g., longitude and latitude).
-#' @param Fagus.seed A data frame containing seed production data for Fagus (beech) trees, with site-specific information such as `plotname.lon.lat` and `Year`.
-#' @param climate.beech.path String. The path to the directory containing the climate data for the site.
+#' @param bio.data A data frame containing seed production data, with site-specific information such as `plotname.lon.lat` and `Year`.
+#' @param climate.path String. The path to the directory containing the climate data for the site.
 #' @param refday Integer. The reference day used for the analysis (default is 305).
 #' @param lastdays Integer. The total number of days used for the analysis (default is 600).
 #' @param rollwin Integer. The size of the rolling window for climate data smoothing (default is 1).
@@ -19,7 +19,7 @@
 #' @examples
 #' \dontrun{
 #' # Example usage:
-#' cues_summary <- basiccues_function_site(Results_CSPsub = Results_CSPsub,
+#' cues_summary <- ATS_peak_detection(Results_days = Results_days,
 #'                                         siteforsub = "longitude=-0.15_latitude=50.85",
 #'                                         Fagus.seed = Fagus.seed,
 #'                                         climate.beech.path = "path/to/climate/data",
@@ -32,37 +32,42 @@
 #'
 #' @import dplyr qs lubridate stringr purrr
 #' @export
-basiccues_function_site <- function(Results_CSPsub, 
-                                    siteforsub, 
-                                    seed.data, 
-                                    climate.path, 
-                                    refday, lastdays, rollwin, 
-                                    lag, threshold) {
-  
+ATS_peak_detection <- function(
+  Results_days,
+  siteforsub,
+  bio_data_all,
+  climate.path,
+  refday,
+  lastdays,
+  rollwin,
+  lag,
+  threshold
+) {
   # Filter the Fagus seed data by the site name
-  data.sub <- seed.data %>%
+  data.sub <- bio_data_all %>%
     dplyr::filter(plotname.lon.lat == siteforsub)
-  
+
   #extract climate matching site
   climate_data <- format_climate_data(
-    site = unique(data.sub$plotname.lon.lat), 
-    path = climate.path, 
+    site = unique(data.sub$plotname.lon.lat),
+    path = climate.path,
     scale.climate = TRUE
   )
-  
+
   # Run the CSP site analysis function
-  runing_basic_cues(data = data.sub,
-                    siteforsub = siteforsub,
-                    lag  = lag,
-                    threshold = threshold,
-                    influence = 0,
-                    tolerancedays = 7,
-                    refday = 305,
-                    lastdays = 600,
-                    rollwin = rollwin,
-                    climate_csv = climate_data,
-                    Results_CSPsub = Results_CSPsub,
-                    variablemoving = 'TMEAN',
-                    myform.fin = formula('log.seed~TMEAN'),
-                    model_type = 'lm')
+  runing_peak_detection(
+    bio_data = data.sub,
+    siteforsub = siteforsub,
+    lag = lag,
+    threshold = threshold,
+    influence = 0,
+    tolerancedays = 7,
+    refday = 305,
+    lastdays = 600,
+    rollwin = rollwin,
+    climate_data = climate_data,
+    Results_days = Results_days,
+    formula_model = formula('log.seed~TMEAN'),
+    model_type = 'lm'
+  )
 }

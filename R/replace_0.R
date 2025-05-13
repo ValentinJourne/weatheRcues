@@ -18,33 +18,39 @@
 replace_0 <- function(vec, threshold) {
   # Find the start and end positions of sequences of 0s
   zero_sequences <- rle(vec)
-  
+
   # Initialize a vector to store the results
   result <- vec
-  
+
   # Keep track of the cumulative position in the original vector
   position <- 1
-  
+
   for (i in seq_along(zero_sequences$lengths)) {
     # Check if the current run is 0s and if it's within the threshold
-    if (zero_sequences$values[i] == 0 && zero_sequences$lengths[i] <= threshold) {
+    if (
+      zero_sequences$values[i] == 0 && zero_sequences$lengths[i] <= threshold
+    ) {
       # Determine the value to replace 0s with
       replace_value <- NA
       if (i > 1 && zero_sequences$values[i - 1] != 0) {
         replace_value <- zero_sequences$values[i - 1]
-      } else if (i < length(zero_sequences$values) && zero_sequences$values[i + 1] != 0) {
+      } else if (
+        i < length(zero_sequences$values) && zero_sequences$values[i + 1] != 0
+      ) {
         replace_value <- zero_sequences$values[i + 1]
       }
-      
+
       # Replace the 0s with the identified value
       if (!is.na(replace_value)) {
-        result[position:(position + zero_sequences$lengths[i] - 1)] <- replace_value
+        result[
+          position:(position + zero_sequences$lengths[i] - 1)
+        ] <- replace_value
       }
     }
-    
+
     # Update the position to the start of the next run
     position <- position + zero_sequences$lengths[i]
   }
-  
+
   return(result)
 }

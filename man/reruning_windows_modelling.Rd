@@ -6,10 +6,10 @@
 \usage{
 reruning_windows_modelling(
   z,
-  tible.sitelevel = tible.sitelevel,
+  bio_data = bio_data,
   window_ranges_df = window_ranges_df,
   rolling.data = rolling.data,
-  myform.fin = formula("log.seed ~ mean.temperature"),
+  formula_model = formula("log.seed ~ mean.temperature"),
   model_type = "lm",
   refday = 305,
   rollwin = 1
@@ -18,8 +18,8 @@ reruning_windows_modelling(
 \arguments{
 \item{z}{Integer. The index representing the row number in the \code{window_ranges_df} data frame, which contains the window ranges for analysis.}
 
-\item{tible.sitelevel}{Data frame. The biological site-level data, which contains
-seed production and other relevant variables for modeling. Default is \code{tible.sitelevel}.}
+\item{bio_data}{Data frame. The biological site-level data, which contains
+seed production and other relevant variables for modeling. Default is \code{bio_data}.}
 
 \item{rolling.data}{Data frame. The climate data containing
 rolling temperature averages and other climate variables. Default is \code{rolling.data}.}
@@ -57,15 +57,15 @@ for the specified index \code{z}.
 \item Filters \code{rolling.data} to retrieve climate data within the window range.
 \item Aggregates temperature data (mean temperature) for each combination of \code{LONGITUDE},
 \code{LATITUDE}, and \code{year}.
-\item Joins the filtered climate data with biological site-level data (\code{tible.sitelevel}).
-\item Fits a linear model (\code{lm}) using the combined data and the predefined formula \code{myform.fin}.
+\item Joins the filtered climate data with biological site-level data (\code{bio_data}).
+\item Fits a linear model (\code{lm}) using the combined data and the predefined formula \code{formula_model}.
 \item Returns a data frame with the model's coefficients, standard errors, p-values, R-squared, AIC,
 number of observations, and sequence ID.
 }
 }
 \examples{
-# Assuming window_ranges_df, rolling.data, and tible.sitelevel are defined:
-result <- reruning_windows_modelling(1, tible.sitelevel = tible.sitelevel, rolling.data = rolling.data)
+# Assuming window_ranges_df, rolling.data, and bio_data are defined:
+result <- reruning_windows_modelling(1, bio_data = bio_data, rolling.data = rolling.data)
 print(result)
 
 }

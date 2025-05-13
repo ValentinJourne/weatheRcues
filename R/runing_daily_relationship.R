@@ -2,11 +2,11 @@
 #'
 #' This function performs a moving window analysis on seed and climate data for a specific site. It involves loading and formatting climate data, applying rolling window functions or not if set rolling at 1 - as done in our study, and then running a moving window analysis to investigate the relationship between seed count and climate variables.
 #'
-#' @param site.name A string specifying the site name for which to perform the analysis. This should match entries in the `plotname.lon.lat` column of `seed.data`.
-#' @param seed.data A data frame containing seed count and site-level information, including `plotname.lon.lat` and `log.seed`.
+#' @param site.name A string specifying the site name for which to perform the analysis. This should match entries in the `plotname.lon.lat` column of `bio_data`.
+#' @param bio_data A data frame containing seed count and site-level information, including `plotname.lon.lat` and `log.seed`.
 #' @param climate.path A string specifying the path to the directory containing climate data files. These files should include the site name in their names.
 #' @param lastdays An integer specifying the number of days to consider in the rolling window analysis.
-#' @param myform A formula specifying the model to fit for each moving window. Default is `formula('log.seed~rolling_avg_tmean')`.
+#' @param formula_model A formula specifying the model to fit for each moving window. Default is `formula('log.seed~rolling_avg_tmean')`.
 #'
 #' @details
 #' The function performs the following steps:
@@ -34,72 +34,93 @@
 #'
 #' result <- site.moving.climate.analysis(
 #'   site.name = site_name,
-#'   seed.data = Fagus_seed,
+#'   bio_data = Fagus_seed,
 #'   climate.path = climate_beech_path,
 #'   lastdays = last_days,
-#'   myform = my_form
+#'   formula_model = my_form
 #' )
 #'
-site.moving.climate.analysis <- function(bio_data, 
-                                         climate_data, 
-                                         lastdays, 
-                                         myform,
-                                         refday = 305,
-                                         yearneed = 2,
-                                         model_type = 'lm',
-                                         rollwin = 1) {
+runing_daily_relationship <- function(
+  bio_data,
+  climate_data,
+  lastdays,
+  formula_model,
+  refday = 305,
+  yearneed = 2,
+  model_type = 'lm',
+  rollwin = 1
+) {
   if (!is.data.frame(bio_data) && !is_tibble(bio_data)) {
     stop("bio_data must be a data frame or tibble.")
   }
-  
+
   if (!is.data.frame(climate_data) && !is_tibble(climate_data)) {
     stop("climate_data must be a data frame or tibble.")
   }
-  
+
   if (!is.numeric(lastdays) || length(lastdays) != 1) {
     stop("lastdays must be a numeric value of length 1.")
   }
-  
+
   if (!is.numeric(refday) || length(refday) != 1) {
     stop("refday must be a numeric value of length 1.")
   }
-  
+
   if (!is.numeric(yearneed) || length(yearneed) != 1) {
     stop("yearneed must be a numeric value of length 1.")
   }
-  
-  if (!is.character(model_type) || length(model_type) != 1 || !model_type %in% c('lm', 'betareg')) {
+
+  if (
+    !is.character(model_type) ||
+      length(model_type) != 1 ||
+      !model_type %in% c('lm', 'betareg')
+  ) {
     stop("model_type must be either 'lm' or 'betareg'.")
   }
-  
-  if (!inherits(myform, "formula")) {
-    stop("myform must be a valid formula. Double check your formula, because both response and predictors are needed well defined")
+
+  if (!inherits(formula_model, "formula")) {
+    stop(
+      "formula_model must be a valid formula. Double check your formula, because both response and predictors are needed well defined"
+    )
   }
-  
-  if (!as.character(myform)[2] %in% colnames(bio_data)) {
-    stop(paste("Column", as.character(myform)[2], "not found in bio_data."))
+
+  if (!as.character(formula_model)[2] %in% colnames(bio_data)) {
+    stop(paste(
+      "Column",
+      as.character(formula_model)[2],
+      "not found in bio_data."
+    ))
   }
-  if (!as.character(myform)[3] %in% colnames(climate_data)) {
-    stop(paste("Column", as.character(myform)[3], "not found in climate_data"))
+  if (!as.character(formula_model)[3] %in% colnames(climate_data)) {
+    stop(paste(
+      "Column",
+      as.character(formula_model)[3],
+      "not found in climate_data"
+    ))
   }
   # Define the year period
   #yearneed <- 2
   yearperiod <- (min(climate_data$year) + yearneed):max(climate_data$year)
-  
+
   # Apply the function across all years in yearperiod and combine results
-  rolling.data <- purrr::map_dfr(yearperiod, reformat.climate.backtothepast, 
-                                 climate = climate_data, 
-                                 yearneed = yearneed, 
-                                 refday = refday, 
-                                 lastdays = lastdays, 
-                                 rollwin = rollwin, 
-                                 variablemoving =  as.character(myform)[3])
-  
-  results.moving.site = runing.movingwin.analysis(data = bio_data,
-                                                  rolling.data = rolling.data,
-                                                  method = 'spearman',
-                                                  myform = myform,
-                                                  model_type = model_type)
-  
+  rolling.data <- purrr::map_dfr(
+    yearperiod,
+    reformat_climate_backtothepast,
+    climate = climate_data,
+    yearneed = yearneed,
+    refday = refday,
+    lastdays = lastdays,
+    rollwin = rollwin,
+    covariates.of.interest = as.character(formula_model)[3]
+  )
+
+  results.moving.site = daily_parameters_rolling_climate(
+    bio_data = bio_data,
+    rolling.data = rolling.data,
+    method = 'spearman',
+    formula_model = formula_model,
+    model_type = model_type
+  )
+
   return(results.moving.site)
 }

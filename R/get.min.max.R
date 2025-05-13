@@ -20,8 +20,8 @@
 #' vec_with_na <- c(NA, 2, 3, 4, 5)
 #' get.min.max(vec_with_na) # returns c(2, 5)
 #'
-get.min.max = function(vector){
-  o.min = min(vector)
-  o.max = max(vector)
-  c(o.min,o.max)
+get.min.max = function(vector) {
+  o.min = min(vector, na.rm = T)
+  o.max = max(vector, na.rm = T)
+  c(o.min, o.max)
 }

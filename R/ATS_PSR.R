@@ -27,39 +27,41 @@
 #' }
 #'
 #' @export
-PSR_function_site <- function(site, 
-                              seed.data, 
-                              lastdays,
-                              refday,
-                              climate.path, 
-                              matrice = c(3,1),
-                              knots = NULL,
-                              tolerancedays = 7,
-                              yearneed = 2) {
-  
+ATS_PSR <- function(
+  site,
+  bio_data_all,
+  lastdays,
+  refday,
+  climate.path,
+  matrice = c(3, 1),
+  knots = NULL,
+  tolerancedays = 7,
+  yearneed = 2
+) {
   # Filter the Fagus seed data by the site name
-  data.sub.fagus <- seed.data %>%
+  data.sub.fagus <- bio_data_all %>%
     dplyr::filter(plotname.lon.lat == site)
-  
+
   #extract climate matching site
   climate_data <- format_climate_data(
-    site = unique(data.sub.fagus$plotname.lon.lat), 
-    path = climate.path, 
+    site = unique(data.sub.fagus$plotname.lon.lat),
+    path = climate.path,
     scale.climate = TRUE
   )
-  
+
   # Run the CSP site analysis function
-  runing_psr_site(bio_data = data.sub.fagus,
-                  site = site,
-                  climate_csv = climate_data,
-                  lastdays = 600,
-                  refday = refday,
-                  rollwin = 1,
-                  covariates.of.interest = 'TMEAN',
-                  matrice = matrice,
-                  knots = knots,
-                  yearneed = yearneed,
-                  tolerancedays = tolerancedays#,
-                  #plot = TRUE
+  runing_psr(
+    bio_data = data.sub.fagus,
+    site = site,
+    climate_data = climate_data,
+    lastdays = 600,
+    refday = refday,
+    rollwin = 1,
+    formula_model = formula('log.seed ~ TMEAN'),
+    matrice = matrice,
+    knots = knots,
+    yearneed = yearneed,
+    tolerancedays = tolerancedays #,
+    #plot = TRUE
   )
 }

@@ -34,43 +34,43 @@
 #'   rollwin = 1
 #' )
 #'
-FULL.moving.climate.analysis <- function(seed.data.all,
-                                         climate.path,
-                                         refday = 305,
-                                         lastdays = 700,
-                                         rollwin = 1,
-                                         myform = formula('log.seed ~ TMEAN'),
-                                         model_type = 'lm') {
-  
+ATS_moving_climate <- function(
+  bio_data_all,
+  climate.path,
+  refday = 305,
+  lastdays = 700,
+  rollwin = 1,
+  formula_model = formula('log.seed ~ TMEAN'),
+  model_type = 'lm'
+) {
   # Get the list of unique site names from seed data
-  al.sites <- unique(seed.data.all$sitenewname)
-  
+  al.sites <- unique(bio_data_all$sitenewname)
+
   # Iterate over each site and perform the moving climate analysis
   results.moving <- purrr::map_dfr(al.sites, function(site.name) {
-    
     # Filter biological data for the current site
-    bio_data <- seed.data.all %>%
+    bio_data <- bio_data_all %>%
       dplyr::filter(sitenewname == site.name) %>%
-      as.data.frame() 
-    
+      as.data.frame()
+
     # format climate
     climate_data <- format_climate_data(
-      site = unique(bio_data$plotname.lon.lat), 
-      path = climate.path, 
+      site = unique(bio_data$plotname.lon.lat),
+      path = climate.path,
       scale.climate = TRUE
     )
-    
+
     # run csp site level
-    site.moving.climate.analysis(
-      bio_data = bio_data, 
-      climate_data = climate_data, 
+    runing_daily_relationship(
+      bio_data = bio_data,
+      climate_data = climate_data,
       lastdays = lastdays,
       refday = refday,
       rollwin = 1,
-      myform = myform,
+      formula_model = formula_model,
       model_type = model_type
     )
   })
-  
+
   return(results.moving)
 }

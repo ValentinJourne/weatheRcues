@@ -27,7 +27,7 @@ years <- startyear:2020
 days_per_year <- 365
 climate_data_simulated <- data.frame(
   date = seq.Date(from = as.Date(paste0(startyear,"-01-01")), by = "day", length.out = length(years) * days_per_year),
-  temp = runif(length(years) * days_per_year, min = 10, max = 30)  # random temperatures
+  temp = runif(length(years) * days_per_year, min = 10, max = 30) 
 )
 
 climate_data_simulated <- climate_data_simulated %>%

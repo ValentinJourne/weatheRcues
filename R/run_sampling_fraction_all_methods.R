@@ -4,8 +4,8 @@
 run_sampling_fraction_all_methods <- function(
   years_to_extract = c(5, 10, 15, 20),
   range,
-  Fagus.seed,
-  beech.site.all,
+  bio.data,
+  site.needed,
   climate.path,
   matrix.psr = c(3, 1)
 ) {
@@ -21,36 +21,68 @@ run_sampling_fraction_all_methods <- function(
   library(purrr)
 
   # Function to get a valid consecutive block
-  get_valid_consecutive_block <- function(years_available, max_year_block) {
-    # Sort and ensure unique years
+  # get_valid_consecutive_block <- function(years_available, max_year_block) {
+  #   # Sort and ensure unique years
+  #   years_available <- sort(unique(years_available))
+  #
+  #   # If the total years available ≤ 30, return all years
+  #   if (length(years_available) <= 30) {
+  #     return(years_available) # Use full data range
+  #   }
+  #
+  #   # Find valid start positions for a `max_year_block`-long sequence
+  #   possible_starts <- which(
+  #     (years_available + max_year_block - 1) %in% years_available
+  #   )
+  #
+  #   # If no valid block is found, return the full dataset (fallback)
+  #   if (length(possible_starts) == 0) {
+  #     return(years_available) # Use full data range
+  #   }
+  #
+  #   # Select a random valid start year
+  #   selected_start <- sample(possible_starts, 1)
+  #
+  #   # Extract the valid block
+  #   return(years_available[
+  #     selected_start:(selected_start + max_year_block - 1)
+  #   ])
+  # }
+
+  get_valid_consecutive_block <- function(years_available, block_size) {
     years_available <- sort(unique(years_available))
 
-    # If the total years available ≤ 30, return all years
-    if (length(years_available) <= 30) {
-      return(years_available) # Use full data range
-    }
+    if (length(years_available) < block_size) return(NULL)
 
-    # Find valid start positions for a `max_year_block`-long sequence
+    # Find all valid start years
     possible_starts <- which(
-      (years_available + max_year_block - 1) %in% years_available
+      (years_available + block_size - 1) %in% years_available
     )
 
-    # If no valid block is found, return the full dataset (fallback)
-    if (length(possible_starts) == 0) {
-      return(years_available) # Use full data range
-    }
+    if (length(possible_starts) == 0) return(NULL)
 
-    # Select a random valid start year
+    # Randomly pick one
     selected_start <- sample(possible_starts, 1)
 
-    # Extract the valid block
-    return(years_available[
-      selected_start:(selected_start + max_year_block - 1)
-    ])
+    return(years_available[selected_start:(selected_start + block_size - 1)])
   }
 
+  # get_valid_consecutive_block <- function(years_available, block_size) {
+  #   years_available <- sort(unique(years_available))
+  #   if (length(years_available) < block_size) return(NULL)
+  #
+  #   for (i in 1:(length(years_available) - block_size + 1)) {
+  #     block <- years_available[i:(i + block_size - 1)]
+  #     if (length(block) == block_size && diff(range(block)) <= block_size + 5) {
+  #       return(block)
+  #     }
+  #   }
+  #
+  #   return(NULL)
+  # }
+
   # Compute valid site year ranges ensuring consecutive observations
-  site_year_ranges <- Fagus.seed %>%
+  site_year_ranges <- bio.data %>%
     dplyr::group_by(plotname.lon.lat) %>%
     dplyr::summarise(
       min_year = min(Year),
@@ -64,27 +96,39 @@ run_sampling_fraction_all_methods <- function(
     ) %>%
     dplyr::filter(!is.null(valid_years)) %>% # Remove sites without valid blocks
     dplyr::mutate(random_start_year = purrr::map_dbl(valid_years, min)) # Get start year
-
   #do extract for consisntent year
   # Iterate over each number of years to extract
   for (year_block in 1:length(years_to_extract)) {
     # Filter data to get consistent blocks
-    seed.data <- Fagus.seed %>%
-      dplyr::left_join(site_year_ranges, by = "plotname.lon.lat") %>%
-      dplyr::group_by(plotname.lon.lat) %>%
-      dplyr::arrange(Year) %>% # Ensure correct order
-      dplyr::mutate(start_row = which(Year == random_start_year)[1]) %>% # Find starting row
-      dplyr::filter(
-        row_number() >= start_row &
-          row_number() < start_row + years_to_extract[year_block]
-      ) %>% # Select next `year_block` rows
-      dplyr::select(-random_start_year, -years_available, -valid_years) %>% # Drop extra columns
-      dplyr::ungroup() %>%
-      as.data.frame()
+    # seed.data <- bio.data %>%
+    #   dplyr::left_join(site_year_ranges, by = "plotname.lon.lat") %>%
+    #   dplyr::group_by(plotname.lon.lat) %>%
+    #   dplyr::arrange(Year) %>% # Ensure correct order
+    #   dplyr::mutate(start_row = which(Year == random_start_year)[1]) %>% # Find starting row
+    #   dplyr::filter(
+    #     row_number() >= start_row &
+    #       row_number() < start_row + years_to_extract[year_block]
+    #   ) %>% # Select next `year_block` rows
+    #   dplyr::select(-random_start_year, -years_available, -valid_years) %>% # Drop extra columns
+    #   dplyr::ungroup() %>%
+    #   as.data.frame()
+    # Loop across sites and extract site-specific data
 
-    #do it with future map instead of map
+    seed.data <- site_year_ranges %>%
+      dplyr::select(plotname.lon.lat, valid_years) %>%
+      dplyr::mutate(
+        selected_years = purrr::map(
+          valid_years,
+          ~ .x[1:years_to_extract[year_block]]
+        )
+      ) %>%
+      tidyr::unnest(cols = selected_years) %>%
+      dplyr::rename(Year = selected_years) %>%
+      dplyr::left_join(bio.data, by = c("plotname.lon.lat", "Year"))
+
+    #do it with future map
     statistics_absolute_climwin_frac <- future_map_dfr(
-      beech.site.all,
+      site.needed,
       ~ {
         # Format the climate data for the site
         climate_data <- format_climate_data(
@@ -152,7 +196,7 @@ run_sampling_fraction_all_methods <- function(
 
     #Run PSR method - to few row is not working
     statistics_psr_method_frac <- map_dfr(
-      beech.site.all,
+      site.needed,
       ~ PSR_function_site(
         site = .x,
         climate.path = climate.path,
@@ -195,7 +239,10 @@ run_sampling_fraction_all_methods <- function(
     })
 
     # Store results for this year block
-    results_all_years[[paste0("years_", year_block)]] <- list.all
+    results_all_years[[paste0(
+      "years_",
+      years_to_extract[year_block]
+    )]] <- list.all
   }
 
   return(results_all_years)
