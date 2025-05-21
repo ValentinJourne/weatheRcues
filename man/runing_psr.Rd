@@ -2,7 +2,7 @@
 % Please edit documentation in R/runing_psr.R
 \name{runing_psr}
 \alias{runing_psr}
-\title{Run P-spline Regression (PSR) to Identify Weather Cues}
+\title{Identify Weather Cue Windows Using Penalized Spline Regression (PSR)}
 \usage{
 runing_psr(
   bio_data = bio_data,
@@ -19,43 +19,47 @@ runing_psr(
 )
 }
 \arguments{
-\item{bio_data}{A data frame containing biological data, including columns such as \code{year}, \code{plotname.lon.lat}, \code{sitenewname}, and the response variable (e.g., \code{log.seed}).}
+\item{bio_data}{A data frame containing biological data. Must include columns such as \code{year}, \code{plotname.lon.lat}, \code{sitenewname}, and the response variable used in \code{formula_model}.}
 
-\item{site}{Character. The site identifier, which must match values in the \code{plotname.lon.lat} column of \code{bio_data}.}
+\item{site}{Character. Site name corresponding to entries in the \code{plotname.lon.lat} column of \code{bio_data}.}
 
-\item{climate_data}{A data frame containing climate data, with columns for \code{year}, \code{yday}, and the climate variable of interest (e.g., \code{TMEAN}).}
+\item{climate_data}{A data frame of daily climate data. Must include \code{year}, \code{yday}, and the climate variable specified in \code{formula_model}.}
 
-\item{lastdays}{Integer. The number of days before the reference date to include in the analysis. Default is 600.}
+\item{lastdays}{Integer. Number of days before the reference date to include in the analysis. Default is 600.}
 
-\item{refday}{Integer. The reference day of year (DOY) from which to track backward. Default is 305 (i.e., November 1st).}
+\item{refday}{Integer. Reference day of year (DOY) from which to look backward in time. Default is 305 (November 1).}
 
-\item{rollwin}{Integer. Size of the rolling window to smooth climate data. Default is 1 (i.e., no smoothing).}
+\item{rollwin}{Integer. Size of the rolling window used to smooth climate data. Default is 1 (no smoothing).}
 
-\item{formula_model}{A formula describing the relationship between the biological response and the climate predictor. Default is \code{log.seed ~ TMEAN}.}
+\item{formula_model}{A formula describing the relationship between the biological response and climate variable (e.g., \code{log.seed ~ TMEAN}).}
 
-\item{matrice}{Numeric vector of length 2. Controls the order of the B-spline and the penalty difference (see \code{mgcv::s}). Default is \code{c(3, 1)}.}
+\item{matrice}{A numeric vector of length 2 controlling the order of the spline and the penalty difference order. See \code{mgcv::s()}. Default is \code{c(3, 1)}.}
 
-\item{knots}{Integer or NULL. Number of knots for the smooth spline. If NULL (default), it is set to \code{number of years - 1}.}
+\item{knots}{Integer or NULL. Number of knots for the spline basis. If NULL (default), it is set to the number of years minus 1.}
 
-\item{tolerancedays}{Integer. Tolerance in days for identifying contiguous periods of significance. Default is 7.}
+\item{tolerancedays}{Integer. Number of days allowed as gaps when defining contiguous significant windows. Default is 7.}
 
-\item{yearneed}{Integer. Number of years of data required for modeling each subset. Default is 2.}
+\item{yearneed}{Integer. Minimum number of years required to include in rolling climate window construction. Default is 2.}
 }
 \value{
-A data frame summarizing:
+A data frame with one row per identified window, including:
 \itemize{
-\item \code{window.open} and \code{window.close} – Identified window bounds.
-\item \code{estimate}, \code{intercept}, \code{r2}, \code{AIC} – Model fit statistics.
-\item \code{nobs}, \code{nsequence.id} – Number of observations and identified window sequences.
+\item \code{window.open}, \code{window.close} – bounds of the identified window
+\item \code{estimate}, \code{intercept} – effect size estimates
+\item \code{r2}, \code{AIC}, \code{nobs} – model performance metrics
+\item \code{sitenewname}, \code{plotname.lon.lat}, \code{reference.day}, \code{nsequence.id} – metadata
 }
 }
 \description{
-This function applies Penalized Spline Regression (PSR) to identify temporal windows during which climate variables (e.g., temperature) significantly influence a biological response variable (e.g., seed production) at a given site. The method is adapted from Roberts et al. and Simmonds et al., and is suitable for exploring time-lagged climate–biology relationships using generalized additive models (GAMs) with a penalized spline term.
+This function applies Penalized Spline Regression (PSR) to identify critical climate windows affecting a biological response variable (e.g., seed production) at a site. Based on the method of Roberts et al. and adapted by Simmonds et al., the approach uses generalized additive models (GAMs) with penalized splines to detect influential time periods by modeling the interaction between time and climate covariates.
 }
 \details{
-The function reformats the climate data into a matrix where each row corresponds to a year and columns to daily values. A GAM is fit using penalized splines to assess the relationship between the response and predictor across time. Significant periods are identified as those where partial effects exceed ±1.96 standard deviations from the mean effect.
+The climate data is reshaped into a matrix of years (rows) by days (columns), and smoothed using penalized splines within a GAM framework.
+The partial effect curve of the climate covariate is extracted, and days with values exceeding ±1.96 standard deviations from the mean are considered significant.
 
-If no significant period is found, a data frame with \code{NA} values is returned. If significant periods are found, the function returns a summary data frame for each detected window, including the model's fit statistics and effect estimates.
+Detected periods are grouped into windows of influence. A linear model is then fit within each window to extract fit statistics (R², AIC, etc.).
+
+If no significant window is found, the function returns a one-row data frame with NA values.
 }
 \examples{
 \dontrun{
