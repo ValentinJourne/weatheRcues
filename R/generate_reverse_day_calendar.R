@@ -42,63 +42,51 @@ generate_reverse_day_calendar <- function(
   yearback = 3,
   start_year = 1946
 ) {
-  print(paste0(
-    "refday:",
-    refday,
-    ' and lastdays:',
-    lastdays,
-    ' and yearback:',
-    yearback
-  ))
-  if (lastdays > 365 & yearback < 2)
-    stop(
-      "You need to adjust last day and yearback. If lastdays is higher than 365, you need 2 years "
-    )
-  if (lastdays > 365 * 2 & yearback < 3)
-    stop(
-      "You need to adjust last day and yearback. If lastdays is higher than 365*2, you need 3 years "
-    )
+  library(dplyr)
+  library(lubridate)
 
-  #Need for the next function
-  monthstart = c('-01-01')
-  DATE = seq(
-    as.Date(paste0(start_year, monthstart)),
-    as.Date(paste0("1953", monthstart)),
-    by = "days"
+  if (lastdays > 365 & yearback < 2) stop("For >365 days, set yearback >= 2")
+  if (lastdays > 730 & yearback < 3) stop("For >730 days, set yearback >= 3")
+
+  end_year <- start_year + yearback + 1
+
+  DATE <- seq(
+    as.Date(paste0(start_year, "-01-01")),
+    as.Date(paste0(end_year, "-01-01")),
+    by = "day"
   )
-  MONTH = format(as.Date(DATE, format = "%Y-%m-%d"), "%m") %>% as.numeric()
-  MONTHab = month.abb[MONTH]
-  YEAR = format(as.Date(DATE, format = "%Y-%m-%d"), "%Y") %>% as.numeric()
-  DOY = yday(DATE)
-  dfata = data.frame(DATE, YEAR, MONTHab, DOY)
-  yearperiod = start_year:1953
-  sizevec = length(unique(YEAR)) - yearback
-  refday = refday
-  vectotemp = NULL
-  for (k in 1:sizevec) {
-    yearsref = yearperiod[k]
+  dfata <- data.frame(
+    DATE = DATE,
+    YEAR = year(DATE),
+    MONTHab = month.abb[month(DATE)],
+    DOY = yday(DATE)
+  )
+
+  yearperiod <- start_year:(end_year - 1)
+  vectotemp <- vector("list", length = length(yearperiod) - yearback)
+
+  for (k in seq_along(vectotemp)) {
+    yearsref <- yearperiod[k + yearback - 1]
     yearrefminusOne <- yearsref - yearback
+
     tt <- dfata %>%
-      dplyr::filter(YEAR <= yearsref & YEAR >= yearrefminusOne) %>%
-      dplyr::mutate(
-        referenceFin = ifelse(
-          YEAR == yearsref & DOY == refday,
-          1,
-          ifelse(YEAR == yearsref & DOY > refday, NA, 0)
+      filter(YEAR >= yearrefminusOne & YEAR <= yearsref) %>%
+      mutate(
+        referenceFin = case_when(
+          YEAR == yearsref & DOY == refday ~ 1,
+          YEAR == yearsref & DOY > refday ~ NA_real_,
+          TRUE ~ 0
         )
       ) %>%
-      dplyr::filter(!is.na(referenceFin)) %>%
-      as.data.frame()
-    #create sequence going back 365 month before
-    seqDays <- seq(1, nrow(tt), 1)
-    newsequance <- rep(seqDays)
-    ttup <- tt %>%
-      dplyr::mutate(days.reversed = rev(newsequance)) %>%
-      dplyr::filter(days.reversed < lastdays)
-    ttupfin = ttup %>%
-      dplyr::arrange(days.reversed) %>%
-      dplyr::mutate(YEAR = max(YEAR))
-    vectotemp <- rbind(vectotemp, ttupfin)
+      filter(!is.na(referenceFin)) %>%
+      arrange(desc(DATE)) %>%
+      mutate(days.reversed = 1:n())
+
+    vectotemp[[k]] <- tt %>%
+      filter(days.reversed < lastdays) %>%
+      arrange(days.reversed) %>%
+      mutate(YEAR = yearsref)
   }
-  return(vectotemp)
+
+  bind_rows(vectotemp)
 }
