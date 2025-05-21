@@ -40,6 +40,7 @@
 #'   formula_model = my_form
 #' )
 #'
+#' @export
 runing_daily_relationship <- function(
   bio_data,
   climate_data,

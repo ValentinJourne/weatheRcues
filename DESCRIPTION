@@ -17,7 +17,6 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 Suggests: 
-    knitr,
     rmarkdown,
     testthat (>= 3.0.0)
 Imports: 
@@ -25,6 +24,7 @@ Imports:
     broom,
     climwin,
     cowplot,
+    DescTools,
     devtools,
     doParallel,
     dplyr,
@@ -35,15 +35,19 @@ Imports:
     gghalves,
     ggpubr,
     ggsci,
+    ggsignif,
     ggspatial,
     gratia,
     here,
+    kableExtra,
+    knitr,
     lubridate,
     Metrics,
     mgcv,
     parallel,
     patchwork,
     performance,
+    pkgnet,
     purrr,
     qs,
     RColorBrewer,

@@ -21,7 +21,7 @@ A tibble with two columns:
 }
 \description{
 This function calculates specified quantiles of a numeric vector and returns
-the results as a tibble. The default quantiles are the 25th, 50th, and 75th percentiles.
+the results as a tibble. The default quantiles are the 25th, 50th, and 75th percentiles. It is a function from https://www.tidyverse.org/blog/2020/03/dplyr-1-0-0-summarise/
 }
 \details{
 The function calculates quantiles specified by the \code{q} parameter for the numeric vector \code{x}.

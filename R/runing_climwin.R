@@ -162,10 +162,17 @@ runing_climwin <- function(
 
   #formula <- as.formula(formulanull) #this one is not working, need dynamic one by using eval and subsitute
   model_formula <- formulanull
-  model_base <- eval(substitute(
-    lm(formula.here, data = bio_data),
-    list(formula.here = model_formula)
-  ))
+  #model_base <- eval(substitute(
+  #  lm(formula.here, data = bio_data),
+  #  list(formula.here = model_formula)
+  #))
+
+  model_base <- eval(
+    substitute(
+      lm(formula.here, data = data_input),
+      list(formula.here = model_formula, data_input = bio_data)
+    )
+  )
 
   # Run the climwin analysis
   climwin_output <- climwin::slidingwin(

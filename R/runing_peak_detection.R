@@ -108,7 +108,7 @@ runing_peak_detection = function(
 
   rolling.data <- map_dfr(
     yearperiod,
-    reformat.climate.backtothepast,
+    reformat_climate_backtothepast,
     climate_data = climate_data,
     yearneed,
     refday = refday,

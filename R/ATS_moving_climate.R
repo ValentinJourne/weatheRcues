@@ -34,6 +34,7 @@
 #'   rollwin = 1
 #' )
 #'
+#' @export
 ATS_moving_climate <- function(
   bio_data_all,
   climate.path,

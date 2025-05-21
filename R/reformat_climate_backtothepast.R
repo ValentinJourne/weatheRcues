@@ -45,6 +45,7 @@
 #'                                                          covariates.of.interest = 'temperature.degree')
 #' head(processed_climate_data)
 #'
+#' @export
 reformat_climate_backtothepast <- function(
   yearsref = 2000,
   climate_data = climate_data,

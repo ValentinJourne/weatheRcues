@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# weatheRcues <img src="man/figures/package-sticker.png" align="right" style="float:right; height:120px;"/>
+# weatheRcues <img src="man/figures/icon.jpeg" align="right" style="float:right; height:120px;"/>
 
 <!-- badges: start -->
 <!-- badges: end -->
@@ -19,17 +19,21 @@
 
 ## Overview
 
-The R code `weatheRcues` was developed to make comparison of weather
-cues method on biological data, here seed production data. We used here
-already developed R package (i.e. climwin) but also alternative methods,
-now accessible in R code from Simmonds et al. The current study is
-already ongoing.
+The `weatheRcues` R code was developed to make comparison of weather
+cues method on biological data, here seed production data. It integrates
+existing R packages (e.g., `climwin`) alongside alternative approaches,
+including methods adapted from Simmonds et al. and Thackeray et al., now
+fully accessible through R code. This work is part of an ongoing study.
+**Disclaimer**, `weatheRcues` is not a formal R package, but rather a
+research compendium - organized with predefined files, folders
+structures, functions in order to support reproducible research.
 
 ## Features
 
 The main purpose of `weatheRcues` is to compare different methods to
 identify weather cues; i.e. what triggers or inhibitors of seed
-production.
+production. Feel free to adjust the code for other variable you would be
+interested in, such as tree ring data, phenological data, etc.
 
 ## Installation
 
@@ -61,25 +65,35 @@ vignette.
 
 ## Long-form documentations
 
-`weatheRcues` provides for now one vignette to learn more about the package:
+`weatheRcues` provides for now one vignette to learn more about the
+package:
 
-- the [Get started](https://ValentinJourne.github.io/weatheRcues/articles/weatheRcues.html)
-vignette describes the core features of the package. Additional information about the methods can be found in Journé et al (in prep)
+- the [Get
+  started](https://ValentinJourne.github.io/weatheRcues/articles/weatheRcues.html)
+  vignette describes the core features of the package. Additional
+  information about the methods can be found in Journé et al (in prep)
 
 ## Citation
 
-Please cite `weatheRcues` as: 
+Please cite `weatheRcues` as:
 
-> Journé Valentin (`r format(Sys.Date(), "%Y")`) weatheRcues: a companion to identify weather cues in seed production. R package version 0.0.0.9000. 
-<https://github.com/ValentinJourne/weatheRcues/>
+> Journé Valentin (2025) weatheRcues: a companion to identify weather
+> cues in seed production. R package version 0.0.0.9000.
+> <https://github.com/ValentinJourne/weatheRcues/>
 
-And for the main study reference as: 
+And for the main study reference as:
 
-> Journé Valentin, Emily G. Simmonds, Maciej Barczyk, Michał Bogdziewicz (`r format(Sys.Date(), "%Y")`) What is the best method to identify weather cues in forest tree reproduction?
+> Journé Valentin, Emily G. Simmonds, Maciej Barczyk, Michał Bogdziewicz
+> (2025) What is the best method to identify weather cues in forest tree
+> reproduction?
 
 ## Contributing
 
-This code is mostly based on previous code, studies, etc (see Journé et al, in prep for more details). Feel free to adjust the code as you want, and do the test you wish. In case you have any question, please contact us. 
+This code is mostly based on previous code, studies, etc (see Journé et
+al, in prep for more details). Feel free to adapt and modify the code
+for your own analyses and testing. If you have any questions,
+suggestions, or have any issues with the code and analysis, please do
+not hesitate to contact us.
 
 ## Acknowledgments
 
@@ -87,12 +101,18 @@ We would like to thank Martijn van de Pol, and Adrian Roberts for the
 different methods they developed. We would also like Nicolas Casajus for
 useful information related to code implementation.
 
-## References
+## Main References
 
-Bailey, L.D. & De Pol, M.V. (2016). Climwin: An R Toolbox for Climate Window Analysis. PLoS ONE.
+Bailey, L.D. & De Pol, M.V. (2016). Climwin: An R Toolbox for Climate
+Window Analysis. PLoS ONE.
 
-Roberts, A.M. (2008). Exploring relationships between phenological and weather data using smoothing.International Journal of Biometeorology. 
+Roberts, A.M. (2008). Exploring relationships between phenological and
+weather data using smoothing.International Journal of Biometeorology.
 
-Thackeray, S.J., Henrys, P.A., Hemming, D., Bell, J.R., Botham, M.S., Burthe, S. et al. (2016). Phenological sensitivity to climate across taxa and trophic levels. Nature.
+Thackeray, S.J., Henrys, P.A., Hemming, D., Bell, J.R., Botham, M.S.,
+Burthe, S. et al. (2016). Phenological sensitivity to climate across
+taxa and trophic levels. Nature.
 
-Simmonds, E.G., Cole, E.F. & Sheldon, B.C. (2019). Cue identification in phenology: A case study of the predictive performance of current statistical tools. Journal of Animal Ecology.
+Simmonds, E.G., Cole, E.F. & Sheldon, B.C. (2019). Cue identification in
+phenology: A case study of the predictive performance of current
+statistical tools. Journal of Animal Ecology.

@@ -7,19 +7,18 @@
 ATS_CSP(
   Results_days,
   siteneame.forsub,
-  bio_data,
+  bio_data_all,
   climate.path,
   refday,
   lastdays,
-  rollwin
+  rollwin,
+  optim.k = F
 )
 }
 \arguments{
 \item{Results_days}{A subset of results for a specific site. Typically a data frame or list that contains climate and seed-related estimates.}
 
 \item{siteneame.forsub}{A character string indicating the site name (longitude and latitude) used to filter the bio dataset.}
-
-\item{bio_data}{A data frame containing biological data for multiple sites, including columns like \code{plotname.lon.lat} that are used to filter for a specific site.}
 
 \item{climate.path}{A string specifying the file path to the climate data related for analysis.}
 
@@ -28,6 +27,8 @@ ATS_CSP(
 \item{lastdays}{An integer representing the total number of days for the climate window analysis.}
 
 \item{rollwin}{An integer specifying the size of the rolling window for the climate data (number of days to average).}
+
+\item{bio_data}{A data frame containing biological data for multiple sites, including columns like \code{plotname.lon.lat} that are used to filter for a specific site.}
 }
 \value{
 A data frame or list, which is the output of the \code{runing_csp_site} function. It typically contains model estimates,

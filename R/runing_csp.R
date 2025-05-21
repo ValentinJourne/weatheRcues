@@ -1,44 +1,53 @@
-#note here it is additional function to extract best windows identified by CSP method
-#' Run Climate Signal Processing for a Site
+#' Run Climate Sensitivity Profile (CSP) Window Identification for a Site
 #'
-#' This function processes climate signal data for a specific site by fitting a generalized additive model (GAM) and running window-based modeling.
+#' This function identifies the most influential weather cue windows at a site using the Climate Sensitivity Profile (CSP) method. It fits generalized additive models (GAMs) to the relationship between slope and $R^2$ values over a series of daily windows and identifies periods where both metrics jointly indicate a strong climate signal. It then extracts these windows and fits linear models to the biological response using climate data smoothed with a rolling average.
 #'
-#' @param Results_days A subset of the `Results_CSP` data frame for a specific site.
-#' @param bio_data A data frame containing site-level bio_data, typically including seed production and climate-related variables.
-#' @param siteneame.forsub A string representing the name of the site to subset from the `Results_CSP` bio_data and climate data.
-#' @param refday An integer specifying the reference day (default is 305).
-#' @param lastdays An integer representing the last day of the range used for the analysis (default is the maximum of the range).
-#' @param rollwin An integer specifying the size of the rolling window used for calculating temperature averages (default is 1).
-#'
-#' @return A data frame (`output_fit_summary.temp`) containing the results of the climate signal processing, including fitted model coefficients, model statistics, and window ranges.
+#' @param Results_days A data frame containing at least columns `estimate` (slope) and `r.squared` (model $R^2$) for each lagged day.
+#' @param bio_data A data frame containing biological observations (e.g., seed production), with identifiers such as `plotname.lon.lat`, `sitenewname`, and the response variable (e.g., `log.seed`).
+#' @param siteneame.forsub Character. The unique site name to be validated against `bio_data`.
+#' @param climate_data A data frame containing daily climate values for the site, with `year`, `yday`, and the climate variable of interest.
+#' @param refday Integer. The reference day of year (DOY) from which to compute backward days (default is 305, i.e., November 1st).
+#' @param lastdays Integer. Number of days to look back from the reference day. Default is the maximum of the defined range.
+#' @param rollwin Integer. Size of the rolling window for smoothing the climate variable. Default is 1 (no smoothing).
+#' @param optim.k Logical. Whether to optimize the GAM knot complexity automatically. Default is FALSE (recommended to avoid overfitting in short time series).
+#' @param formula_model A formula object defining the relationship to fit (e.g., `log.seed ~ TMEAN`).
+#' @param model_type Character. Either `'lm'` or `'betareg'` for model fitting type. Default is `'lm'`.
+#' @param option.check.name Logical. Whether to validate that `siteneame.forsub` matches site identifiers in `bio_data`. Default is TRUE.
+#' @param yearneed Integer. Minimum number of years of historical data needed to calculate lagged climate windows. Default is 2.
 #'
 #' @details
-#' The function processes climate signal data for a specific site by running the following steps:
+#' This function:
 #' \itemize{
-#'   \item It extracts slopes and R-squared values from `Results_days` and constructs a temporary data frame for further analysis.
-#'   \item It fits a generalized additive model (GAM) to the slopes and R-squared values using the `optimize_and_fit_gam` function.
-#'   \item It identifies consecutive sequences of significant days (`extract_consecutive_sequences`) and generates window ranges.
-#'   \item It loads the climate data for the site from the specified path, formats the dates, and scales the climate variables.
-#'   \item It computes rolling temperature data for the selected time period.
-#'   \item It applies the `reruning_windows_modelling` function across all identified window ranges to model the relationship between seed production and climate variables.
+#'   \item Fits smoothed GAMs to the slopes and $R^2$ values from the CSP results.
+#'   \item Detects sequences of days with high combined signal strength using thresholds derived from GAM predictions.
+#'   \item Extracts and formats these windows, then uses `reruning_windows_modelling()` to fit models over the selected periods.
+#'   \item Applies a rolling window to climate data across all years needed to support modeling.
 #' }
 #'
-#' @note The function assumes that the `bio_data` argument corresponds to the site-level data and contains a column named `plotname.lon.lat` for site identification.
+#' @return A data frame containing, for each selected window:
+#' \itemize{
+#'   \item Window opening and closing dates (`window.open`, `window.close`)
+#'   \item Model performance metrics (e.g., `r2`, `AIC`, `estimate`, `intercept`)
+#'   \item Number of observations used, window identifier, and reference day
+#' }
+#'
+#' @note This function assumes daily resolution and that column names (e.g., `log.seed`, `TMEAN`) are consistent across inputs. Validate `bio_data` and `climate_data` for consistency before using.
 #'
 #' @examples
 #' \dontrun{
-#' # Example usage:
-#' output <- runing_csp_site(Results_days = Results_CSP[i],
-#'                           bio_data = bio_data,
-#'                           siteneame.forsub = "site_123",
-#'                           climate.path = "/path/to/climate/data")
+#' result <- runing_csp(
+#'   Results_days = CSP_output[["Site_1"]],
+#'   bio_data = bio_data,
+#'   climate_data = climate_data,
+#'   siteneame.forsub = "Site_1",
+#'   refday = 305,
+#'   lastdays = 600
+#' )
 #' }
 #'
-#' @import dplyr
-#' @import qs
-#' @import purrr
-#' @import lubridate
+#' @seealso \code{\link{optimize_and_fit_gam}}, \code{\link{reruning_windows_modelling}}, \code{\link{get_predictions_windows}}, \code{\link{extract_consecutive_sequences}}
 #' @export
+
 runing_csp = function(
   Results_days = Results_days,
   bio_data = bio_data,
@@ -51,7 +60,8 @@ runing_csp = function(
   optim.k = F,
   formula_model = formula('seed~TMEAN'),
   model_type = 'lm',
-  yearneed = 2
+  yearneed = 2,
+  k.provided = NA
 ) {
   if (
     !is.data.frame(Results_days) &&
@@ -102,11 +112,16 @@ runing_csp = function(
   temporary <- data.frame(slope = unlist(slope), day = day, r_s = unlist(r_s))
 
   #do not optimize, too long
+  if (is.na(k.provided)) {
+    k.provided = (nrow(bio_data) - 1)
+  } else {
+    k.provided = k.provided
+  }
   results <- optimize_and_fit_gam(
     temporary,
     optim.k = optim.k,
     plots = F,
-    k = (nrow(bio_data) - 1)
+    k = k.provided
   ) #(12+6) #I will specify just number of month
 
   days = get_predictions_windows(
@@ -137,7 +152,7 @@ runing_csp = function(
   yearperiod <- (min(climate_data$year) + yearneed):max(climate_data$year)
   rolling.data <- purrr::map_dfr(
     yearperiod,
-    reformat.climate.backtothepast,
+    reformat_climate_backtothepast,
     climate_data = climate_data,
     yearneed,
     refday = refday,

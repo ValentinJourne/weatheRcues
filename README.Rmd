@@ -14,7 +14,7 @@ knitr::opts_chunk$set(collapse  = TRUE,
 
 
 
-weatheRcues <img src="man/figures/package-sticker.png" align="right" style="float:right; height:120px;"/>
+weatheRcues <img src="man/figures/icon.jpeg" align="right" style="float:right; height:120px;"/>
 =========================================================
 
 <!-- badges: start -->
@@ -38,12 +38,14 @@ weatheRcues <img src="man/figures/package-sticker.png" align="right" style="floa
 
 ## Overview
 
-The R code `weatheRcues` was developed to make comparison of weather cues method on biological data, here seed production data. We used here already developed R package (i.e. climwin) but also alternative methods, now accessible in R code from Simmonds et al; Thackeray et al. The current study is already ongoing. 
+The `weatheRcues` R code was developed to make comparison of weather cues method on biological data, here seed production data. It integrates existing R packages (e.g., `climwin`) alongside alternative approaches, including methods adapted from Simmonds et al. and Thackeray et al., now fully accessible through R code.
+This work is part of an ongoing study. 
+**Disclaimer**, `weatheRcues` is not a formal R package, but rather a research compendium - organized with predefined files, folders structures, functions in order to support reproducible research. 
 
 
 ## Features
 
-The main purpose of `weatheRcues` is to compare different methods to identify weather cues; i.e. what triggers or inhibitors of seed production. Note here that we developped this R compendium, but feel free to adjust the code for other variable you would be interested in, such as tree ring, phenology data, etc.
+The main purpose of `weatheRcues` is to compare different methods to identify weather cues; i.e. what triggers or inhibitors of seed production. Feel free to adjust the code for other variable you would be interested in, such as tree ring data, phenological data, etc.
 
 
 ## Installation
@@ -98,9 +100,7 @@ And for the main study reference as:
 
 ## Contributing
 
-This code is mostly based on previous code, studies, etc (see Journé et al, in prep for more details). Feel free to adjust the code as you want, and do the test you wish. In case you have any question, please contact us. 
-
-
+This code is mostly based on previous code, studies, etc (see Journé et al, in prep for more details). Feel free to adapt and modify the code for your own analyses and testing. If you have any questions, suggestions, or have any issues with the code and analysis, please do not hesitate to contact us.
 
 ## Acknowledgments
 

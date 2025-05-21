@@ -2,7 +2,7 @@
 % Please edit documentation in R/runing_psr.R
 \name{runing_psr}
 \alias{runing_psr}
-\title{Run PSR Method for Identifying Weather Cues at a Specific Site}
+\title{Run P-spline Regression (PSR) to Identify Weather Cues}
 \usage{
 runing_psr(
   bio_data = bio_data,
@@ -19,54 +19,57 @@ runing_psr(
 )
 }
 \arguments{
-\item{bio_data}{A data frame containing biological data with columns such as \code{Year}, \code{plotname.lon.lat}, and \code{log.seed}.}
+\item{bio_data}{A data frame containing biological data, including columns such as \code{year}, \code{plotname.lon.lat}, \code{sitenewname}, and the response variable (e.g., \code{log.seed}).}
 
-\item{site}{A string representing the site name, which should match the \code{plotname.lon.lat} in \code{bio_data}.}
+\item{site}{Character. The site identifier, which must match values in the \code{plotname.lon.lat} column of \code{bio_data}.}
 
-\item{lastdays}{Integer specifying the total number of days to include in the analysis (default is 600).}
+\item{climate_data}{A data frame containing climate data, with columns for \code{year}, \code{yday}, and the climate variable of interest (e.g., \code{TMEAN}).}
 
-\item{refday}{Integer representing the reference day (default is 305). This is the day from which the climate data is tracked backward.}
+\item{lastdays}{Integer. The number of days before the reference date to include in the analysis. Default is 600.}
 
-\item{rollwin}{Integer representing the size of the rolling window for calculating the rolling averages (default is 1).}
+\item{refday}{Integer. The reference day of year (DOY) from which to track backward. Default is 305 (i.e., November 1st).}
 
-\item{matrice}{A numeric vector of length 2 indicating the penalties to apply in the smoothing function of the model (default is \code{c(3,1)}).}
+\item{rollwin}{Integer. Size of the rolling window to smooth climate data. Default is 1 (i.e., no smoothing).}
 
-\item{knots}{Integer specifying the number of knots for the GAM model. If \code{NULL} (default), the function will set the knots to \code{ny - 1}, where \code{ny} is the number of years of data.}
+\item{formula_model}{A formula describing the relationship between the biological response and the climate predictor. Default is \code{log.seed ~ TMEAN}.}
 
-\item{tolerancedays}{Integer specifying the tolerance (in days) for identifying consecutive periods (default is 7).}
+\item{matrice}{Numeric vector of length 2. Controls the order of the B-spline and the penalty difference (see \code{mgcv::s}). Default is \code{c(3, 1)}.}
 
-\item{plot}{Logical indicating whether to plot the partial effect of the model (default is \code{TRUE}).}
+\item{knots}{Integer or NULL. Number of knots for the smooth spline. If NULL (default), it is set to \code{number of years - 1}.}
+
+\item{tolerancedays}{Integer. Tolerance in days for identifying contiguous periods of significance. Default is 7.}
+
+\item{yearneed}{Integer. Number of years of data required for modeling each subset. Default is 2.}
 }
 \value{
-A data frame summarizing the significant windows identified by the model. If no significant windows are found, the function returns a data frame with \code{NA} values.
+A data frame summarizing:
+\itemize{
+\item \code{window.open} and \code{window.close} – Identified window bounds.
+\item \code{estimate}, \code{intercept}, \code{r2}, \code{AIC} – Model fit statistics.
+\item \code{nobs}, \code{nsequence.id} – Number of observations and identified window sequences.
+}
 }
 \description{
-This function performs the PSR (Penalized Spline Regression) method to identify weather cues for biological data, based on the methodology from Roberts et al., and adapted from Simmonds et al.
-The function uses climate data and site-specific biological data to model the effect of temperature (or other climate variables) on a response variable (e.g., seed production).
+This function applies Penalized Spline Regression (PSR) to identify temporal windows during which climate variables (e.g., temperature) significantly influence a biological response variable (e.g., seed production) at a given site. The method is adapted from Roberts et al. and Simmonds et al., and is suitable for exploring time-lagged climate–biology relationships using generalized additive models (GAMs) with a penalized spline term.
 }
 \details{
-The function processes climate data, calculates rolling averages of climate variables, and fits a generalized additive model (GAM) to the biological data. It identifies periods of significant climate effects based on the model's output.
+The function reformats the climate data into a matrix where each row corresponds to a year and columns to daily values. A GAM is fit using penalized splines to assess the relationship between the response and predictor across time. Significant periods are identified as those where partial effects exceed ±1.96 standard deviations from the mean effect.
 
-The function checks for significant temperature cues by calculating upper and lower limits (mean ± 1.96 * SD) and identifies time windows where the model exceeds these thresholds.
+If no significant period is found, a data frame with \code{NA} values is returned. If significant periods are found, the function returns a summary data frame for each detected window, including the model's fit statistics and effect estimates.
 }
 \examples{
 \dontrun{
-# Example usage:
-bio_data <- your_biological_data
-site <- "site_name"
-climate_path <- "path_to_climate_data/"
-result <- runing_psr_site(bio_data = bio_data,
-                          site = site,
-                          lastdays = 600,
-                          refday = 305,
-                          rollwin = 1,
-                          matrice = c(3,1),
-                          knots = NULL,
-                          tolerancedays = 7,
-                          plot = TRUE)
+result <- runing_psr(
+  bio_data = bio_df,
+  site = "site_001",
+  climate_data = climate_df,
+  lastdays = 600,
+  refday = 305,
+  formula_model = log.seed ~ TMEAN
+)
 }
 
 }
 \seealso{
-\code{\link[mgcv]{gam}}
+\code{\link[mgcv]{gam}}, \code{\link{extract_sequences_auto}}, \code{\link{reruning_windows_modelling}}
 }

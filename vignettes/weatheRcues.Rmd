@@ -14,11 +14,12 @@ knitr::opts_chunk$set(collapse = TRUE,
 
 
 ```{r setup}
+library(mgcv)
 library(weatheRcues)
 
 ```
 
-
+Here I simulated some climate and seed production (because we all love seed production and want to know more about plant mast seeding). If you are studying small mammals, please study mast seeding :D 
 ```{r generatedata, echo=FALSE, results='hide'}
 library(tidyverse)
 set.seed(123)  
@@ -32,14 +33,15 @@ climate_data_simulated <- data.frame(
 
 climate_data_simulated <- climate_data_simulated %>%
   mutate(year = format(date, "%Y"),
-         day_of_year = yday(date),
+         yday = yday(date),
          year = as.numeric(year)) %>%
   mutate(across(c(temp), scale)) %>%
-  mutate(across(c(temp), as.vector))
+  mutate(across(c(temp), as.vector)) %>% 
+  mutate(LONGITUDE = NA, LATITUDE = NA)
 
 # Select ~ one week in June 
 june_week <- climate_data_simulated %>%
-  filter(day_of_year >= 150 & day_of_year <= 160)
+  filter(yday >= 150 & yday <= 160)
 
 seed_production_simulated <- june_week %>%
   group_by(year) %>%
@@ -52,26 +54,90 @@ seed_production_simulated <- june_week %>%
   mutate(year = as.numeric(as.character(year))) %>% 
   mutate(Date = paste0( "15/06/",year)) %>% #need a date, even if absolute window
   mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y"))  %>%
-  dplyr::mutate(across(c(mean_temp_scaled, log.seed), as.vector)) #remove the vector type 
+  dplyr::mutate(across(c(mean_temp_scaled, log.seed), as.vector)) %>% 
+  mutate(plotname.lon.lat = "test",
+         sitenewname = "test")#remove the vector type 
   
 
 ```
 
+For the first method, I was using climwin R package. Here I customize a bit the function, but you can specify more option (for aggregate weather window for example).
 ```{r slidingwindow}
 head(seed_production_simulated)
 head(climate_data_simulated)
 
-# climwin.output = climwin_site_days(
-#         climate_data = climate_data_simulated,
-#         data = seed_production_simulated,  
-#         site.name = 'test',  
-#         range = c(300, 0), #double check if climate is long enough (to match bio data)
-#         cinterval = 'day',
-#         refday = c(01, 11),  
-#         optionwindows = 'absolute',  
-#         climate_var = 'temp'  
-#       )
-# 
-# climwin.output
+climwin.output = runing_climwin(
+        climate_data = climate_data_simulated,
+        bio_data = seed_production_simulated,
+        site.name = 'test',
+        range = c(10, 0), #double check if climate is long enough (to match bio data)
+        cinterval = 'day',
+        refday = c(01, 11),
+        optionwindows = 'absolute',
+        climate_var = 'temp'
+      )
 
+climwin.output
+
+```
+
+The others method, the idea is to make a correalation for each days with your variable of interest. 
+
+
+```{r PSR}
+head(seed_production_simulated)
+head(climate_data_simulated)
+
+pspline.output = runing_psr(
+  bio_data = seed_production_simulated,
+  site = 'test',
+  climate_data = climate_data_simulated,
+  lastdays = 10,
+  refday = 305,
+  rollwin = 1,
+  formula_model = formula('log.seed ~ temp'),
+  matrice = c(3, 1),
+  knots = NULL,
+  tolerancedays = 7,
+  yearneed = 1
+)
+
+pspline.output
+```
+
+
+```{r CSP and Peak}
+head(seed_production_simulated)
+head(climate_data_simulated)
+
+daily.relation.res = runing_daily_relationship(
+  bio_data = seed_production_simulated,
+  climate_data = climate_data_simulated,
+  lastdays = 50,
+  refday = 305,
+  rollwin = 1,
+  formula_model = formula('log.seed ~ temp'),
+  yearneed = 1
+)
+
+csp.out = runing_csp(Results_days =daily.relation.res,
+           bio_data = seed_production_simulated,
+           climate_data= climate_data_simulated,
+           siteneame.forsub = "test",
+           refday = 305,
+           lastdays = 50,
+           rollwin = 1, yearneed = 1,
+           k.provided = -1, #by default please keep na, here is just a test to make it fast
+           formula_model = formula('log.seed ~ temp'), optim.k = F, option.check.name = F)
+csp.out
+peak.out = runing_peak_detection(Results_days = daily.relation.res,
+           bio_data = seed_production_simulated,
+           climate_data = climate_data_simulated,
+           refday = 305,
+           lastdays = 50,
+           rollwin = 1, yearneed = 1,formula_model = formula('log.seed ~ temp'),
+           lag = 10,
+           threshold = 0,
+  tolerancedays = 7)
+peak.out
 ```

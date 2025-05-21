@@ -1,44 +1,46 @@
-#' Run PSR Method for Identifying Weather Cues at a Specific Site
+#' Run P-spline Regression (PSR) to Identify Weather Cues
 #'
-#' This function performs the PSR (Penalized Spline Regression) method to identify weather cues for biological data, based on the methodology from Roberts et al., and adapted from Simmonds et al.
-#' The function uses climate data and site-specific biological data to model the effect of temperature (or other climate variables) on a response variable (e.g., seed production).
+#' This function applies Penalized Spline Regression (PSR) to identify temporal windows during which climate variables (e.g., temperature) significantly influence a biological response variable (e.g., seed production) at a given site. The method is adapted from Roberts et al. and Simmonds et al., and is suitable for exploring time-lagged climate–biology relationships using generalized additive models (GAMs) with a penalized spline term.
 #'
-#' @param bio_data A data frame containing biological data with columns such as `Year`, `plotname.lon.lat`, and `log.seed`.
-#' @param site A string representing the site name, which should match the `plotname.lon.lat` in `bio_data`.
-#' @param lastdays Integer specifying the total number of days to include in the analysis (default is 600).
-#' @param refday Integer representing the reference day (default is 305). This is the day from which the climate data is tracked backward.
-#' @param rollwin Integer representing the size of the rolling window for calculating the rolling averages (default is 1).
-#' @param matrice A numeric vector of length 2 indicating the penalties to apply in the smoothing function of the model (default is `c(3,1)`).
-#' @param knots Integer specifying the number of knots for the GAM model. If `NULL` (default), the function will set the knots to `ny - 1`, where `ny` is the number of years of data.
-#' @param tolerancedays Integer specifying the tolerance (in days) for identifying consecutive periods (default is 7).
-#' @param plot Logical indicating whether to plot the partial effect of the model (default is `TRUE`).
+#' @param bio_data A data frame containing biological data, including columns such as `year`, `plotname.lon.lat`, `sitenewname`, and the response variable (e.g., `log.seed`).
+#' @param site Character. The site identifier, which must match values in the `plotname.lon.lat` column of `bio_data`.
+#' @param climate_data A data frame containing climate data, with columns for `year`, `yday`, and the climate variable of interest (e.g., `TMEAN`).
+#' @param lastdays Integer. The number of days before the reference date to include in the analysis. Default is 600.
+#' @param refday Integer. The reference day of year (DOY) from which to track backward. Default is 305 (i.e., November 1st).
+#' @param rollwin Integer. Size of the rolling window to smooth climate data. Default is 1 (i.e., no smoothing).
+#' @param formula_model A formula describing the relationship between the biological response and the climate predictor. Default is \code{log.seed ~ TMEAN}.
+#' @param matrice Numeric vector of length 2. Controls the order of the B-spline and the penalty difference (see \code{mgcv::s}). Default is \code{c(3, 1)}.
+#' @param knots Integer or NULL. Number of knots for the smooth spline. If NULL (default), it is set to \code{number of years - 1}.
+#' @param tolerancedays Integer. Tolerance in days for identifying contiguous periods of significance. Default is 7.
+#' @param yearneed Integer. Number of years of data required for modeling each subset. Default is 2.
 #'
 #' @details
-#' The function processes climate data, calculates rolling averages of climate variables, and fits a generalized additive model (GAM) to the biological data. It identifies periods of significant climate effects based on the model's output.
+#' The function reformats the climate data into a matrix where each row corresponds to a year and columns to daily values. A GAM is fit using penalized splines to assess the relationship between the response and predictor across time. Significant periods are identified as those where partial effects exceed ±1.96 standard deviations from the mean effect.
 #'
-#' The function checks for significant temperature cues by calculating upper and lower limits (mean ± 1.96 * SD) and identifies time windows where the model exceeds these thresholds.
+#' If no significant period is found, a data frame with \code{NA} values is returned. If significant periods are found, the function returns a summary data frame for each detected window, including the model's fit statistics and effect estimates.
 #'
-#' @return A data frame summarizing the significant windows identified by the model. If no significant windows are found, the function returns a data frame with `NA` values.
+#' @return A data frame summarizing:
+#' \itemize{
+#'   \item \code{window.open} and \code{window.close} – Identified window bounds.
+#'   \item \code{estimate}, \code{intercept}, \code{r2}, \code{AIC} – Model fit statistics.
+#'   \item \code{nobs}, \code{nsequence.id} – Number of observations and identified window sequences.
+#' }
 #'
 #' @examples
 #' \dontrun{
-#' # Example usage:
-#' bio_data <- your_biological_data
-#' site <- "site_name"
-#' climate_path <- "path_to_climate_data/"
-#' result <- runing_psr_site(bio_data = bio_data,
-#'                           site = site,
-#'                           lastdays = 600,
-#'                           refday = 305,
-#'                           rollwin = 1,
-#'                           matrice = c(3,1),
-#'                           knots = NULL,
-#'                           tolerancedays = 7,
-#'                           plot = TRUE)
+#' result <- runing_psr(
+#'   bio_data = bio_df,
+#'   site = "site_001",
+#'   climate_data = climate_df,
+#'   lastdays = 600,
+#'   refday = 305,
+#'   formula_model = log.seed ~ TMEAN
+#' )
 #' }
 #'
-#' @seealso \code{\link[mgcv]{gam}}
+#' @seealso \code{\link[mgcv]{gam}}, \code{\link{extract_sequences_auto}}, \code{\link{reruning_windows_modelling}}
 #' @export
+
 runing_psr = function(
   bio_data = bio_data,
   site = site,
@@ -123,7 +125,7 @@ runing_psr = function(
   # Apply the function across all years in yearperiod and combine results
   rolling.data <- map_dfr(
     yearperiod,
-    reformat.climate.backtothepast,
+    reformat_climate_backtothepast,
     climate_data = climate_data,
     yearneed = yearneed,
     refday = refday,

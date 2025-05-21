@@ -39,14 +39,15 @@
 ATS_CSP <- function(
   Results_days,
   siteneame.forsub,
-  bio_data,
+  bio_data_all,
   climate.path,
   refday,
   lastdays,
-  rollwin
+  rollwin,
+  optim.k = F
 ) {
   # Filter the Fagus seed data by the site name
-  data.sub.fagus <- bio_data %>%
+  data.sub.fagus <- bio_data_all %>%
     dplyr::filter(
       sitenewname == siteneame.forsub | plotname.lon.lat == siteneame.forsub
     )
@@ -65,6 +66,7 @@ ATS_CSP <- function(
     siteneame.forsub = siteneame.forsub,
     climate_data = climate_data,
     refday = refday,
+    optim.k = optim.k,
     lastdays = lastdays, # Change from max(range) to lastdays
     rollwin = rollwin,
     formula_model = formula('log.seed~TMEAN'),
