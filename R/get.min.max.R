@@ -11,7 +11,6 @@
 #' @details This function returns the smallest and largest values from the input numeric vector.
 #' If the vector contains missing values (`NA`), they will be ignored in the calculation.
 #'
-#' @export
 #'
 #' @examples
 #' vec <- c(1, 2, 3, 4, 5)
@@ -20,6 +19,7 @@
 #' vec_with_na <- c(NA, 2, 3, 4, 5)
 #' get.min.max(vec_with_na) # returns c(2, 5)
 #'
+#' @export
 get.min.max = function(vector) {
   o.min = min(vector, na.rm = T)
   o.max = max(vector, na.rm = T)

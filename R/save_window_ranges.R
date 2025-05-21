@@ -22,35 +22,36 @@
 #' sequences <- list(c(1, 2, 3, 4, 5), c(10, 11, 12, 13))
 #' window_ranges <- save_window_ranges(sequences)
 #' print(window_ranges)
-#'
+#'@export
 save_window_ranges <- function(sequences_days) {
-  # Initialize a list to store the results
   window_ranges <- list()
-  
+
   # Check the length of sequences_days
   if (length(sequences_days) == 1) {
     # If only one sequence, save it directly
     window.close <- sequences_days[[1]][1]
     window.open <- tail(sequences_days[[1]], n = 1)
-    
+
     # Store the result in the list
     window_ranges[[1]] <- c(window.close, window.open)
   } else {
     # Loop through each sequence and save the windows
     for (p in 1:length(sequences_days)) {
       window.close <- sequences_days[[p]][1]
-      window.open <- tail(sequences_days[[p]], n = 1)
-      
+      window.open <- tail(sequences_days[[p]], n = 1) #should come from utils base R
+
       # Store the result in the list
       window_ranges[[p]] <- c(window.close, window.open)
     }
   }
-  
+
   # Convert the list to a data frame for easier handling
-  window_ranges_df <- do.call(rbind, lapply(window_ranges, function(x) {
-    data.frame(window.close = x[1], 
-               window.open = x[2])
-  }))
-  
+  window_ranges_df <- do.call(
+    rbind,
+    lapply(window_ranges, function(x) {
+      data.frame(window.close = x[1], window.open = x[2])
+    })
+  )
+
   return(window_ranges_df)
 }

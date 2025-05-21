@@ -53,9 +53,9 @@ The standardized values are then converted to vectors using \code{as.vector()}.
 \dontrun{
 # Format climate data for site "example_site" located at "/data/climate"
 formatted_data <- format_climate_data(
-  site = "example_site", 
-  path = "/data/climate", 
-  scale.climate = TRUE, 
+  site = "example_site",
+  path = "/data/climate",
+  scale.climate = TRUE,
   file_type = "qs"
 )
 }

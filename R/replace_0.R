@@ -15,6 +15,7 @@
 #' replace_0(vec, threshold = 2)
 #' # Expected output: c(1, 2, 2, 2, 3, 4, 0, 0, 0, 5)
 #'
+#'@export
 replace_0 <- function(vec, threshold) {
   # Find the start and end positions of sequences of 0s
   zero_sequences <- rle(vec)

@@ -23,5 +23,4 @@ The function first removes missing values using \code{na.omit()}. It then calcul
 values <- c(1.5, 2.3, 3.1, NA, 4.0)
 standard_error <- se(values)
 print(standard_error)
-
 }

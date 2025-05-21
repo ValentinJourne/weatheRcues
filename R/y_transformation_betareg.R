@@ -1,26 +1,27 @@
-#' Transform Response Variable for Beta Regression
+#' Transform Response Variable for Use in Beta Regression
 #'
-#' This function transforms a response variable \( y \) for use in beta regression
-#' by scaling it to fit the range required by beta regression models. The transformation
-#' is performed as follows:
+#' This function rescales a numeric response variable to ensure all values lie strictly within the (0, 1) interval,
+#' as required by beta regression models. It uses the common transformation:
 #'
 #' \deqn{y' = \frac{y \cdot (n - 1) + 0.5}{n}}
 #'
-#' where \( n \) is the number of non-missing observations in \( y \).
+#' where \eqn{n} is the number of non-missing observations in \eqn{y}. This ensures that no values are exactly 0 or 1,
+#' which would otherwise cause errors in beta regression.
 #'
-#' @param y A numeric vector of response values that are to be transformed. The vector
-#'          can contain NA values which will be ignored in the calculation of the transformation.
+#' @param y Numeric vector. The response variable to be transformed. Can contain missing values (NA), which will be excluded from the computation of \eqn{n}, but preserved in the output.
 #'
-#' @return A numeric vector of the same length as `y`, containing the transformed response values.
-#'         Values are scaled to the range (0, 1), suitable for beta regression.
+#' @return A numeric vector of the same length as \code{y}, with values transformed to lie within (0, 1), suitable for use in beta regression.
+#'
+#' @note This transformation is especially useful prior to fitting models using \code{\link[betareg]{betareg}}.
 #'
 #' @examples
-#' # Example usage
-#' y <- c(0.1, 0.5, NA, 0.3, 0.9)
-#' transformed_y <- y.transf.betareg(y)
-#' print(transformed_y)
+#' y <- c(0.0, 0.5, 1.0, NA, 0.3)
+#' y_transformed <- y_transformation_betareg(y)
+#' print(y_transformed)
 #'
+#' @seealso \code{\link[betareg]{betareg}} for fitting beta regression models.
 #' @export
+
 y_transformation_betareg <- function(y) {
   n.obs <- sum(!is.na(y))
   (y * (n.obs - 1) + 0.5) / n.obs

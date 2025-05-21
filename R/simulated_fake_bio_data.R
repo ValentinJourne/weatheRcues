@@ -1,92 +1,80 @@
-#for simulating fake data bio
-simulated_fake_bio_data = function(
+#' Simulate Biological Data Based on Climate Windows
+#'
+#' This function generates simulated biological datasets (e.g., seed production) using specified
+#' alpha, beta, and sigma values to create controlled relationships with climate predictors.
+#' You can save the simulated results to a specified folder using `.qs` format. Feel free to adjust this code for your own ;D
+#'
+#' @param fakeclimatewindow A data frame of simulated climate data (must include `year` and `TMEAN`).
+#' @param setup.param A named list with numeric ranges for parameters: `alpha`, `beta`, and `sigma`.
+#' @param num_simulations Integer. Number of simulated biological datasets to generate.
+#' @param save_fake_data Logical. Whether to save the simulations to disk. Default is `TRUE`.
+#' @param overwrite Logical. Whether to overwrite existing `.qs` file if it exists. Default is `FALSE`.
+#' @param save_path Character. Folder path where the file should be saved. Default is `'outputs'`.
+#'
+#' @return A list of data frames containing simulated biological datasets with metadata.
+#' @export
+simulated_fake_bio_data <- function(
   fakeclimatewindow,
   setup.param,
   num_simulations,
   save_fake_data = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  save_path = here("Application_MASTREE/outputs")
 ) {
-  results_list <- vector("list", num_simulations) #save in list
-  for (i in seq_len(num_simulations)) {
-    # Randomly sample alpha, beta, and sigma from the provided ranges to the uniform
-    alpha.random.value <- runif(
-      1,
-      min = setup.param$alpha[1],
-      max = setup.param$alpha[2]
-    )
-    beta.random.value <- runif(
-      1,
-      min = setup.param$beta[1],
-      max = setup.param$beta[2]
-    )
-    sigma.random.value <- runif(
-      1,
-      min = setup.param$sigma[1],
-      max = setup.param$sigma[2]
-    )
+  results_list <- vector("list", num_simulations)
 
-    # Simulate seed production, need same june week data, coming from the same climate data simulated
+  for (i in seq_len(num_simulations)) {
+    alpha.random.value <- runif(1, setup.param$alpha[1], setup.param$alpha[2])
+    beta.random.value <- runif(1, setup.param$beta[1], setup.param$beta[2])
+    sigma.random.value <- runif(1, setup.param$sigma[1], setup.param$sigma[2])
+
     seed_production_simulated <- fakeclimatewindow %>%
       dplyr::group_by(year) %>%
       dplyr::summarise(TMEAN = mean(TMEAN)) %>%
-      # Standardize the mean temperature for proper correlation, as in the main analysis, already scaled before..!
-      # Generate log.seed with controlled correlation
-      mutate(
+      dplyr::mutate(
         log.seed = alpha.random.value +
           beta.random.value * TMEAN +
           rnorm(n(), mean = 0, sd = sigma.random.value)
-      ) %>% #add the random noise based on sigma
-      dplyr::filter(year > startyear) %>%
-      dplyr::mutate(year = as.numeric(as.character(year))) %>%
-      dplyr::mutate(Date = paste0("15/06/", year)) %>%
-      dplyr::mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y"))
-
-    # Run regression to get R^2 before climwin
-    reg.summary.simulation <- summary(lm(
-      log.seed ~ TMEAN,
-      data = seed_production_simulated
-    ))
-    r2sim.before.climwin <- reg.summary.simulation$adj.r.squared
-
-    # Bind results and store them
-    result <- seed_production_simulated %>%
-      dplyr::bind_cols(
-        r2.before.climwin = r2sim.before.climwin,
-        alpha.random.value.setup = alpha.random.value,
-        beta.random.value.setup = beta.random.value,
-        sigma.random.value.setup = sigma.random.value
       ) %>%
+      dplyr::filter(year > startyear) %>%
       dplyr::mutate(
+        year = as.numeric(as.character(year)),
+        Date = paste0("15/06/", year),
+        Date2 = strptime(as.character(Date), format = "%d/%m/%Y"),
         sitenewname = as.character(i),
         plotname.lon.lat = as.character(i)
       )
 
-    #generate X simulated datasets
+    r2sim.before.climwin <- summary(
+      lm(log.seed ~ TMEAN, data = seed_production_simulated)
+    )$adj.r.squared
+
+    result <- seed_production_simulated %>%
+      dplyr::mutate(
+        r2.before.climwin = r2sim.before.climwin,
+        alpha.random.value.setup = alpha.random.value,
+        beta.random.value.setup = beta.random.value,
+        sigma.random.value.setup = sigma.random.value
+      )
+
     results_list[[i]] <- result
   }
 
-  if (
-    file.exists(here(paste0(
-      'outputs/simulated_bio_data_nsim_',
-      num_simulations,
-      '.qs'
-    )))
-  ) {
-    if (overwrite) {
-      message("File exists. Overwriting. Hope it was not too bad")
-      qs::qsave(
-        results_list,
-        here(paste0('outputs/simulated_bio_data_nsim_', num_simulations, '.qs'))
-      )
+  if (save_fake_data) {
+    filename <- paste0("simulated_bio_data_nsim_", num_simulations, ".qs")
+    full_path <- file.path(save_path, filename)
+
+    if (file.exists(full_path)) {
+      if (overwrite) {
+        message("File exists. Overwriting at: ", full_path)
+        qs::qsave(results_list, full_path)
+      } else {
+        message("File exists. Skipping overwrite as 'overwrite = FALSE'.")
+      }
     } else {
-      message("File exists. Skipping overwrite as 'overwrite = FALSE'.")
+      message("Saving new file at: ", full_path)
+      qs::qsave(results_list, full_path)
     }
-  } else {
-    message("File does not exist. Creating a new file.")
-    qs::qsave(
-      results_list,
-      here(paste0('outputs/simulated_bio_data_nsim_', num_simulations, '.qs'))
-    )
   }
 
   return(results_list)

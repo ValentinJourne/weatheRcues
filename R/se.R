@@ -16,9 +16,9 @@
 #' values <- c(1.5, 2.3, 3.1, NA, 4.0)
 #' standard_error <- se(values)
 #' print(standard_error)
-#'
-se <- function(x){
+#'@export
+se <- function(x) {
   x2 <- na.omit(x)
   n <- length(x2)
-  sd(x2)/sqrt(n)
+  sd(x2) / sqrt(n)
 }

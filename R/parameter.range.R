@@ -18,8 +18,6 @@
 #' - `beta`: Processed values for the beta parameter.
 #' - `sigma`: Processed values for the sigma parameter.
 #'
-#' @export
-#'
 #' @examples
 #' # Example with mean and standard deviation option
 #' alpha <- rnorm(100)
@@ -32,23 +30,28 @@
 #' param_ranges_min_max <- parameter.range(alpha, beta, sigma, option = "min.max")
 #' print(param_ranges_min_max)
 #'
-parameter.range = function(raw.data.param.alpha,
-                           raw.data.param.beta,
-                           raw.data.param.sigma,
-                           option = 'mean.sd'){
-  
-  if(option == 'min.max'){
+#' @export
+parameter.range = function(
+  raw.data.param.alpha,
+  raw.data.param.beta,
+  raw.data.param.sigma,
+  option = 'mean.sd'
+) {
+  if (option == 'min.max') {
     raw.data.param.alpha = get.min.max(as_vector(raw.data.param.alpha))
     raw.data.param.beta = get.min.max(as_vector(raw.data.param.beta))
     raw.data.param.sigma = get.min.max(as_vector(raw.data.param.sigma))
-  } else if(option == 'mean.sd'){
+  } else if (option == 'mean.sd') {
     raw.data.param.alpha = get.mean.sd(as_vector(raw.data.param.alpha))
     raw.data.param.beta = get.mean.sd(as_vector(raw.data.param.beta))
     raw.data.param.sigma = get.mean.sd(as_vector(raw.data.param.sigma))
   } else {
     stop('wrong option: must be either "mean.sd" or "min.max"')
   }
-  
-  list(alpha = raw.data.param.alpha, beta = raw.data.param.beta, sigma = raw.data.param.sigma)
-  
+
+  list(
+    alpha = raw.data.param.alpha,
+    beta = raw.data.param.beta,
+    sigma = raw.data.param.sigma
+  )
 }

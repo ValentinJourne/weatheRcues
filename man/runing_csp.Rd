@@ -21,66 +21,67 @@ runing_csp(
 )
 }
 \arguments{
-\item{Results_days}{A data frame containing at least columns \code{estimate} (slope) and \code{r.squared} (model $R^2$) for each lagged day.}
+\item{Results_days}{A data frame with daily results from a previous CSP analysis. Must contain \code{estimate} (slope) and \code{r.squared} for each lag day.}
 
-\item{bio_data}{A data frame containing biological observations (e.g., seed production), with identifiers such as \code{plotname.lon.lat}, \code{sitenewname}, and the response variable (e.g., \code{log.seed}).}
+\item{bio_data}{A data frame of biological data (e.g., seed production). Must include identifiers such as \code{plotname.lon.lat}, \code{sitenewname}, \code{year}, and the response variable.}
 
-\item{siteneame.forsub}{Character. The unique site name to be validated against \code{bio_data}.}
+\item{siteneame.forsub}{A character string identifying the target site. Used to validate data alignment if \code{option.check.name = TRUE}.}
 
-\item{option.check.name}{Logical. Whether to validate that \code{siteneame.forsub} matches site identifiers in \code{bio_data}. Default is TRUE.}
+\item{option.check.name}{Logical. Whether to check if \code{siteneame.forsub} matches identifiers in \code{bio_data}. Default is \code{TRUE}.}
 
-\item{climate_data}{A data frame containing daily climate values for the site, with \code{year}, \code{yday}, and the climate variable of interest.}
+\item{climate_data}{A data frame of daily climate data. Must include columns for \code{year}, \code{yday}, and the climate variable used in the model.}
 
-\item{refday}{Integer. The reference day of year (DOY) from which to compute backward days (default is 305, i.e., November 1st).}
+\item{refday}{Integer. The reference day of year (e.g., 305 for Nov 1) from which to count backwards. Default is 305.}
 
-\item{lastdays}{Integer. Number of days to look back from the reference day. Default is the maximum of the defined range.}
+\item{lastdays}{Integer. Number of days prior to \code{refday} to include in the climate window. Default is \code{max(range)}.}
 
-\item{rollwin}{Integer. Size of the rolling window for smoothing the climate variable. Default is 1 (no smoothing).}
+\item{rollwin}{Integer. Size of the rolling window applied to the climate variable. Default is 1 (no smoothing).}
 
-\item{optim.k}{Logical. Whether to optimize the GAM knot complexity automatically. Default is FALSE (recommended to avoid overfitting in short time series).}
+\item{optim.k}{Logical. Whether to optimize the GAM smoothness (\code{k}). Default is \code{FALSE}. Recommended to be \code{FALSE} for small time series.}
 
-\item{formula_model}{A formula object defining the relationship to fit (e.g., \code{log.seed ~ TMEAN}).}
+\item{formula_model}{A model formula (e.g., \code{log.seed ~ TMEAN}). Used for downstream model fitting on extracted windows.}
 
-\item{model_type}{Character. Either \code{'lm'} or \code{'betareg'} for model fitting type. Default is \code{'lm'}.}
+\item{model_type}{Model type for window-based modeling. Either \code{'lm'} (default) or \code{'betareg'}. For now only lm option is available (but we are planing for future option)}
 
-\item{yearneed}{Integer. Minimum number of years of historical data needed to calculate lagged climate windows. Default is 2.}
+\item{yearneed}{Integer. Minimum number of years of data to include before modeling. Used to define valid years. Default is 2.}
+
+\item{k.provided}{Optional. An integer to manually set the number of knots (\code{k}) for GAM smoothing. If \code{NA} (default), it uses \code{nrow(bio_data) - 1}.}
 }
 \value{
-A data frame containing, for each selected window:
+A data frame summarizing the model fit for each identified weather cue window, including:
 \itemize{
-\item Window opening and closing dates (\code{window.open}, \code{window.close})
-\item Model performance metrics (e.g., \code{r2}, \code{AIC}, \code{estimate}, \code{intercept})
-\item Number of observations used, window identifier, and reference day
+\item \code{window.open}, \code{window.close}: Start and end of the cue window (in days before \code{refday})
+\item \code{estimate}, \code{intercept}: Model coefficients from fitting the biological response to the cue
+\item \code{r2}, \code{AIC}, \code{nobs}: Model diagnostics and number of observations
+\item \code{sitenewname}, \code{plotname.lon.lat}: Site identifiers
 }
 }
 \description{
-This function identifies the most influential weather cue windows at a site using the Climate Sensitivity Profile (CSP) method. It fits generalized additive models (GAMs) to the relationship between slope and $R^2$ values over a series of daily windows and identifies periods where both metrics jointly indicate a strong climate signal. It then extracts these windows and fits linear models to the biological response using climate data smoothed with a rolling average.
+Identifies the most influential weather cue windows at a given site using the Climate Sensitivity Profile (CSP) method.
+This method smooths the relationship between climate covariates and a biological response over daily lags using GAMs, and extracts
+periods of jointly strong slope and R² signals. These windows are then used to fit predictive models and evaluate their performance.
 }
 \details{
-This function:
-\itemize{
-\item Fits smoothed GAMs to the slopes and $R^2$ values from the CSP results.
-\item Detects sequences of days with high combined signal strength using thresholds derived from GAM predictions.
-\item Extracts and formats these windows, then uses \code{reruning_windows_modelling()} to fit models over the selected periods.
-\item Applies a rolling window to climate data across all years needed to support modeling.
-}
-}
-\note{
-This function assumes daily resolution and that column names (e.g., \code{log.seed}, \code{TMEAN}) are consistent across inputs. Validate \code{bio_data} and \code{climate_data} for consistency before using.
+The Climate Sensitivity Profile (CSP) approach builds on daily linear models to estimate the strength of association between a climate variable
+and a biological response. These daily slopes and R² values are smoothed with GAMs, and time windows are extracted where both metrics show consistent signal.
+
+The extracted windows are used to compute rolling means over historical climate data, which are then used to fit simple models on the biological data.
 }
 \examples{
 \dontrun{
-result <- runing_csp(
-  Results_days = CSP_output[["Site_1"]],
-  bio_data = bio_data,
-  climate_data = climate_data,
-  siteneame.forsub = "Site_1",
+runing_csp(
+  Results_days = my_daily_CSP_results,
+  bio_data = bio_df,
+  climate_data = climate_df,
+  siteneame.forsub = "Site_001",
   refday = 305,
-  lastdays = 600
+  lastdays = 600,
+  formula_model = formula('log.seed ~ TMEAN')
 )
 }
 
 }
 \seealso{
-\code{\link{optimize_and_fit_gam}}, \code{\link{reruning_windows_modelling}}, \code{\link{get_predictions_windows}}, \code{\link{extract_consecutive_sequences}}
+\code{\link{optimize_and_fit_gam}}, \code{\link{get_predictions_windows}},
+\code{\link{extract_consecutive_sequences}}, \code{\link{reruning_windows_modelling}}
 }

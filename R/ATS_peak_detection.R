@@ -1,37 +1,53 @@
-#' Apply Basic Cues Function to a Specific Site
+#' Perform Peak signal detection Analysis Across all Time Series (ATS)
 #'
-#' This function applies the `runing_basic_cues` method to analyze climate and seed data for a specific site. It identifies weather cues based on the provided results from a CSP analysis and climate data for the site.
+#' This function performs peak signal detection on climate and seed production data for a specific site
+#' using the CSP-derived slope and R² values. The function identifies strong signal periods (weather cue windows)
+#' by detecting peaks in the product of slope and R² using a thresholding algorithm. It then evaluates those periods
+#' using linear models.
 #'
-#' @param Results_days A data frame containing the results method for the site, including slope and R-squared values.
-#' @param siteforsub String. The unique identifier for the site (e.g., longitude and latitude).
-#' @param bio.data A data frame containing seed production data, with site-specific information such as `plotname.lon.lat` and `Year`.
-#' @param climate.path String. The path to the directory containing the climate data for the site.
-#' @param refday Integer. The reference day used for the analysis (default is 305).
-#' @param lastdays Integer. The total number of days used for the analysis (default is 600).
-#' @param rollwin Integer. The size of the rolling window for climate data smoothing (default is 1).
+#' @param Results_days A data frame containing daily results from prior CSP analysis. Must include columns `estimate` (slope) and `r.squared`.
+#' @param siteforsub Character. Site identifier, typically formatted as `longitude=..._latitude=...`, used to match `bio_data_all`.
+#' @param bio_data_all A data frame of biological data across multiple sites. Must include `plotname.lon.lat`, `sitenewname`, `log.seed`, and `Year`.
+#' @param climate.path Character. File path to the folder containing site-specific climate `.qs` files.
+#' @param refday Integer. Day of year used as the reference point for backwards windowing. Default is 305 (November 1).
+#' @param lastdays Integer. Number of days before `refday` to include in the analysis window. Default is 600.
+#' @param rollwin Integer. Size of the rolling window to apply to climate data (in days). Default is 1 (no smoothing).
+#' @param lag Integer. Number of past days used in rolling mean/std for the thresholding algorithm.
+#' @param threshold Numeric. Threshold in standard deviations to classify a signal as a peak.
 #'
 #' @details
-#' The function filters the seed data for the specified site and applies the `runing_basic_cues` function to analyze the relationship between climate variables and biological data. It identifies key weather cues by applying a thresholding algorithm to the results of a CSP analysis.
+#' This function:
+#' \itemize{
+#'   \item Filters the biological dataset for a specific site using `siteforsub`.
+#'   \item Loads climate data for the matching site using `format_climate_data()`.
+#'   \item Applies `runing_peak_detection()` to identify windows with strong signal (high slope × R² product).
+#'   \item Evaluates each identified window using regression and returns performance summaries.
+#' }
 #'
-#' @return
-#' A data frame summarizing the fitted model for each identified weather cue window. If no signals are detected, the function will return a message indicating that no windows were identified.
+#' The internal peak detection algorithm uses a moving z-score filter to identify signal periods that exceed
+#' a given number of standard deviations above the mean.
+#'
+#' @return A data frame summarizing all identified weather cue windows and their corresponding model results (e.g., slope, R², RMSE). If no window is detected, a message is returned instead.
 #'
 #' @examples
 #' \dontrun{
-#' # Example usage:
-#' cues_summary <- ATS_peak_detection(Results_days = Results_days,
-#'                                         siteforsub = "longitude=-0.15_latitude=50.85",
-#'                                         Fagus.seed = Fagus.seed,
-#'                                         climate.beech.path = "path/to/climate/data",
-#'                                         refday = 305,
-#'                                         lastdays = 600,
-#'                                         rollwin = 1)
+#' cues_summary <- ATS_peak_detection(
+#'   Results_days = Results_CSP[["longitude=3.5_latitude=44.1"]],
+#'   siteforsub = "longitude=3.5_latitude=44.1",
+#'   bio_data_all = Fagus.seed,
+#'   climate.path = "data/climate/",
+#'   refday = 305,
+#'   lastdays = 600,
+#'   rollwin = 1,
+#'   lag = 100,
+#'   threshold = 3
+#' )
 #' }
 #'
-#' @seealso \code{\link{runing_basic_cues}}
-#'
-#' @import dplyr qs lubridate stringr purrr
+#' @seealso \code{\link{runing_peak_detection}}, \code{\link{Thresholding_algorithm}}, \code{\link{save_window_ranges}}
+#' @import dplyr purrr lubridate stringr
 #' @export
+
 ATS_peak_detection <- function(
   Results_days,
   siteforsub,

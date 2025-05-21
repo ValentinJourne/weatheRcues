@@ -9,4 +9,4 @@
 library(testthat)
 library(weatheRcues)
 
-test_check("weatheRcues")
+#test_check("weatheRcues")

@@ -1,51 +1,51 @@
-#' Format Climate Data for Moving Windows analysis
+#' Reformat Climate Data for Time-Lagged Window Analysis
 #'
-#' This function processes climate data to create a historical moving window of climate variables based on a reference day and a period going back in time.
-#' It adjusts for leap years, applies a rolling average to the specified climate variable, and prepares the data for analysis over past periods.
-#' Here you could adjust the rolling window to more than 1day (for example if you want average temperature over 7 days, or more or less), but in our method comparison, we set the default to 1
+#' This function extracts and processes historical daily climate data relative to a reference date.
+#' It constructs a "reversed day" timeline for backward-looking analyses (e.g., climate cue detection),
+#' applies a rolling average (if specified), and prepares the data for use in time-window modeling.
 #'
-#' @param yearsref Numeric. The reference year from which to start the calculations. Default is 2000.
-#' @param climate_data Data frame. The climate_data dataset containing variables such as temperature and date information.
-#' @param yearneed Numeric. The number of years needed to adjust for fruit maturation time. Default is 2. But the idea is that if you want to look more than 1095 days to the past, you need to adjust here
-#' @param refday Numeric. The reference day of the year (DOY) from which the moving window calculation begins. Default is 274.
-#' @param lastdays Numeric. The total number of days to go back from the reference day. Default is 1095 (3 years).
-#' @param rollwin Numeric. The window size for the rolling average calculation. Default is 1.
-#' @param covariates.of.interest Character. The name of the climate_data variable to apply the rolling average to. Default is 'temperature.degree' because it is my variable temperature name.
+#' @param yearsref Integer. The reference year from which to anchor the backward window. Typically corresponds to a seed or biological event year.
+#' @param climate_data Data frame. Must include `year`, `yday`, `LONGITUDE`, `LATITUDE`, `date`, and the target climate variable.
+#' @param yearneed Integer. Number of years of prior data to include. Controls how far back the data will be gathered. Default is 2.
+#' @param refday Integer. Day of year (DOY) representing the reference event (e.g., 305 for Nov 1st). Adjusted for leap years if applicable.
+#' @param lastdays Integer. Number of days to include in the backward time window. Default is 1095 (≈ 3 years).
+#' @param rollwin Integer. Rolling average window size (in days). Default is 1 (no smoothing).
+#' @param covariates.of.interest Character. Name of the climate variable column to apply the rolling average to (e.g., `"TMEAN"`).
+#' @param align.moving Character. Alignment of the rolling mean (`"right"`, `"left"`, or `"center"`). Passed to \code{zoo::rollmeanr}. Default is `"right"`.
 #'
 #' @details
-#' The function performs the following tasks:
+#' The function:
 #' \itemize{
-#'   \item Checks if the specified variable exists in the climate_data dataset.
-#'   \item Adjusts the reference day if the reference year is a leap year.
-#'   \item Filters the climate_data data to include only the relevant years.
-#'   \item Creates a sequence of days going back from the reference day.
-#'   \item Applies a rolling average to the specified climate_data variable.
-#'   \item Returns a data frame with the processed climate data, including the rolling average.
+#'   \item Validates inputs and ensures required columns are present.
+#'   \item Handles leap years by adjusting `refday` if needed.
+#'   \item Filters the climate data for the target window (`yearref - yearneed` to `yearref`).
+#'   \item Reverses the daily time vector for backward analysis (e.g., day -1, -2, ..., -1095).
+#'   \item Computes a rolling average on the climate variable (optional).
+#'   \item Outputs a clean data frame suitable for merging with biological observations.
 #' }
 #'
-#' If the specified `covariates.of.interest` is not found in the climate_data dataset, a warning is issued, and the function returns `NULL`.
-#'
-#' @return A data frame containing:
-#' \item{LONGITUDE}{Longitude of the location.}
-#' \item{LATITUDE}{Latitude of the location.}
-#' \item{year}{The year of each record.}
-#' \item{date}{The date of each record.}
-#' \item{yday}{Day of Year (DOY) for each date.}
-#' \item{days.reversed}{Number of days going back from the reference day.}
-#' \item{rolling_avg_clim}{Rolling average of the specified climate_data variable.}
+#' @return A data frame with columns:
+#' \item{LONGITUDE, LATITUDE, year, date, yday}{Metadata and temporal structure.}
+#' \item{days.reversed}{The backward time index from the reference day (1 = most recent).}
+#' \item{<climate_variable>}{Smoothed (or raw) values of the climate variable specified.}
 #'
 #' @examples
-#' # Example usage of the reformat.climate.backtothepast function
-#' processed_climate_data <- reformat_climate_backtothepast(yearsref = 2000,
-#'                                                          climate_data = climate_data,
-#'                                                          yearneed = 2,
-#'                                                          refday = 274,
-#'                                                          lastdays = 1095,
-#'                                                          rollwin = 7,
-#'                                                          covariates.of.interest = 'temperature.degree')
-#' head(processed_climate_data)
+#' \dontrun{
+#' processed <- reformat_climate_backtothepast(
+#'   yearsref = 2020,
+#'   climate_data = my_climate_df,
+#'   yearneed = 2,
+#'   refday = 305,
+#'   lastdays = 700,
+#'   rollwin = 7,
+#'   covariates.of.interest = "TMEAN"
+#' )
+#' head(processed)
+#' }
 #'
+#' @seealso \code{\link[zoo]{rollmean}}, \code{\link[lubridate]{leap_year}}, \code{\link[dplyr]{mutate}}
 #' @export
+
 reformat_climate_backtothepast <- function(
   yearsref = 2000,
   climate_data = climate_data,

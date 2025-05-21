@@ -7,43 +7,53 @@
 optimize_and_fit_gam(temporary, optim.k = TRUE, plots = F, k = 20)
 }
 \arguments{
-\item{temporary}{A data frame containing the data to fit the GAM models. It must include at least two columns: \code{slope} (the response variable for the slope model) and \code{r_s} (the response variable for the R-squared model), as well as \code{day} (the predictor variable).}
+\item{temporary}{A data frame or tibble containing the input data. Must contain at least the columns: \code{day}, \code{slope}, and \code{r_s}.}
 
-\item{optim.k}{A logical flag indicating whether to optimize the number of knots (\code{k}) for the smooth term. If \code{TRUE}, the function will search for the optimal number of knots. Default is \code{TRUE}.}
+\item{optim.k}{Logical. If \code{TRUE}, the function attempts to optimize the number of knots \code{k} by checking significance
+of smooth terms using \code{mgcv::k.check}. If \code{FALSE}, a fixed value for \code{k} is used. Default is \code{TRUE}.}
 
-\item{plots}{A logical flag indicating whether to plot the fitted GAM models. If \code{TRUE}, plots of the fitted models and their residuals will be displayed. Default is \code{FALSE}.}
+\item{plots}{Logical. If \code{TRUE}, plots of the fitted GAM models with partial effects and residuals are displayed using \code{gratia}. Default is \code{FALSE}.}
 
-\item{k}{An integer specifying the number of knots to use if \code{optim.k} is \code{FALSE}. Default is \code{20}. If \code{optim.k} is \code{TRUE}, this parameter is ignored.}
+\item{k}{Integer. The number of knots to use for the GAM smooth term if \code{optim.k = FALSE}. Ignored if \code{optim.k = TRUE}. Default is \code{20}.}
 }
 \value{
-A list containing:
+A list with the following components:
 \itemize{
-\item \code{slope_gam}: The fitted GAM model for the slope.
-\item \code{rs_gam}: The fitted GAM model for R-squared.
-\item \code{k}: The number of knots used in the models.
+\item \code{slope_gam}: Fitted GAM for the slope variable.
+\item \code{rs_gam}: Fitted GAM for the R² variable.
+\item \code{k}: The number of knots used in the GAM fitting.
 }
 }
 \description{
-This function fits Generalized Additive Models (GAMs) to predict slope and R-squared values based on the provided data. It includes an option to optimize the number of knots used in the smooth term of the GAM. If optimization is enabled, it searches for the optimal number of knots that results in significant p-values for the model's smooth terms.
+This function fits two Generalized Additive Models (GAMs) to describe the relationship between a time variable (\code{day})
+and two response variables (\code{slope} and \code{r.squared}) typically derived from a Climate Sensitivity Profile (CSP).
+It includes the option to automatically optimize the number of knots (\code{k}) for the smooth term using \code{mgcv::k.check}.
 }
 \details{
-If \code{optim.k} is \code{TRUE}, the function iterates over a range of possible knot values (from 10 to 365). For each value, it fits a GAM model and checks the significance of the smooth term using \code{k.check}. The first value of \code{k} that results in significant p-values for all tests is chosen as the optimal number of knots. If no optimal value is found, the default value of \code{k = -1} is used.
+If \code{optim.k = TRUE}, the function iteratively fits GAMs across a range of \code{k} values (from 10 to 365)
+and performs \code{k.check} until it finds a value of \code{k} with all significant smooth term p-values (p < 0.05).
+If no suitable \code{k} is found, it defaults to \code{k = -1}.
 
-The function fits two GAM models: one for the \code{slope} and one for \code{r_s}, both with the chosen number of knots. If \code{plots} is \code{TRUE}, it plots the fitted models and their residuals using \code{cowplot}.
+Two separate models are fit:
+\itemize{
+\item \code{slope_gam}: GAM model of \code{slope ~ s(day)}
+\item \code{rs_gam}: GAM model of \code{r_s ~ s(day)}
+}
+
+If \code{plots = TRUE}, both models are visualized using \code{gratia::draw()} and displayed via \code{cowplot::plot_grid()}.
 }
 \examples{
-# Example data
-set.seed(123)
-temporary <- data.frame(
+set.seed(42)
+temp_df <- data.frame(
   day = 1:365,
-  slope = rnorm(365),
-  r_s = rnorm(365)
+  slope = rnorm(365, mean = 0, sd = 0.5),
+  r_s = runif(365, min = 0, max = 1)
 )
 
-# Fit GAM models with automatic optimization of knots
-result <- optimize_and_fit_gam(temporary, optim.k = TRUE, plots = TRUE)
+# Automatic knot optimization
+result <- optimize_and_fit_gam(temp_df, optim.k = TRUE, plots = TRUE)
 
-# Fit GAM models with a fixed number of knots
-result_fixed_k <- optimize_and_fit_gam(temporary, optim.k = FALSE, k = 30, plots = TRUE)
+# Use fixed number of knots
+result_fixed <- optimize_and_fit_gam(temp_df, optim.k = FALSE, k = 30, plots = TRUE)
 
 }

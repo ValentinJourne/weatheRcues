@@ -1,50 +1,49 @@
-#' Re-run climate windows modeling for a specified sequence
+#' Re-run Climate Window Model for a Specific Window Sequence
 #'
-#' This function re-runs climate windows modeling for a given index `z`, extracting
-#' window ranges, filtering rolling temperature data, and merging it with biological
-#' site-level data to fit a linear model (`lm`) using a predefined formula.
+#' This function re-fits a regression model for a given climate window (defined by index `z`) using previously calculated window bounds.
+#' It aggregates the relevant climate covariate over the selected window, merges it with biological data, and fits a model (either linear or beta regression) to assess the effect.
 #'
-#' @param z Integer. The index representing the row number in the `window_ranges_df` data frame, which contains the window ranges for analysis.
-#' @param bio_data Data frame. The biological site-level data, which contains
-#'   seed production and other relevant variables for modeling. Default is `bio_data`.
-#' @param rolling.data Data frame. The climate data containing
-#'   rolling temperature averages and other climate variables. Default is `rolling.data`.
-#'
-#' @return A data frame containing the model results, which include:
-#'   - `sitenewname`: The name of the biological site.
-#'   - `plotname.lon.lat`: The plot name and its longitude/latitude.
-#'   - `reference.day`: The day used as the reference point for windowing.
-#'   - `windows.size`: The size of the window in days.
-#'   - `window.open`: Start of the window period (days before the reference day).
-#'   - `window.close`: End of the window period (days before the reference day).
-#'   - `intercept`: The intercept of the fitted linear model.
-#'   - `intercept.se`: Standard error of the intercept.
-#'   - `estimate`: The coefficient estimate for the temperature variable in the model.
-#'   - `estimate.se`: Standard error of the coefficient estimate.
-#'   - `pvalue`: P-value for the temperature coefficient.
-#'   - `r2`: R-squared value of the model.
-#'   - `AIC`: Akaike Information Criterion for the model.
-#'   - `nobs`: Number of observations used in the model.
-#'   - `nsequence.id`: The index corresponding to the window range used.
+#' @param z Integer. The index (row) of the `window_ranges_df` data frame indicating which climate window to evaluate.
+#' @param bio_data Data frame. Biological site-level data containing at least `year`, `sitenewname`, and `plotname.lon.lat`, as well as the response variable in `formula_model`.
+#' @param window_ranges_df Data frame. Contains window definitions (e.g., `window.open`, `window.close`) and optional metadata like `windows.sequences.number`.
+#' @param rolling.data Data frame. Rolling climate data with columns `days.reversed`, `year`, `LONGITUDE`, `LATITUDE`, and the climate covariate used in `formula_model`.
+#' @param formula_model Formula. A model formula (e.g., `log.seed ~ mean.temperature`) specifying the response and climate covariate to be modeled.
+#' @param model_type Character. The type of model to fit. Options are `"lm"` (default) for linear regression or `"betareg"` for beta regression.
+#' @param refday Integer. The reference day (day of year) from which `days.reversed` were calculated. Included for metadata.
+#' @param rollwin Integer. The size of the rolling window applied to the climate data. Included for metadata.
 #'
 #' @details
 #' The function:
-#' 1. Extracts the `window.open` and `window.close` values from the `window_ranges_df`
-#'    for the specified index `z`.
-#' 2. Filters `rolling.data` to retrieve climate data within the window range.
-#' 3. Aggregates temperature data (mean temperature) for each combination of `LONGITUDE`,
-#'    `LATITUDE`, and `year`.
-#' 4. Joins the filtered climate data with biological site-level data (`bio_data`).
-#' 5. Fits a linear model (`lm`) using the combined data and the predefined formula `formula_model`.
-#' 6. Returns a data frame with the model's coefficients, standard errors, p-values, R-squared, AIC,
-#'    number of observations, and sequence ID.
+#' \itemize{
+#'   \item Extracts the corresponding open/close bounds for window `z`.
+#'   \item Aggregates the covariate over the selected time window.
+#'   \item Joins the climate summary with biological observations by `year`.
+#'   \item Fits the model and extracts relevant statistics (e.g., coefficients, R², AIC, etc.).
+#' }
+#' If `model_type = "betareg"`, ensure the response variable is bounded between 0 and 1.
+#'
+#' @return A data frame (1 row) summarizing the model results for window `z`, including:
+#' \itemize{
+#'   \item Site info: \code{sitenewname}, \code{plotname.lon.lat}
+#'   \item Window info: \code{window.open}, \code{window.close}, \code{windows.size}, \code{nsequence.id}
+#'   \item Model results: \code{intercept.estimate}, \code{slope.estimate}, \code{pvalue}, \code{r2}, \code{AIC}, \code{sigma}, \code{nobs}
+#' }
 #'
 #' @examples
-#' # Assuming window_ranges_df, rolling.data, and bio_data are defined:
-#' result <- reruning_windows_modelling(1, bio_data = bio_data, rolling.data = rolling.data)
-#' print(result)
+#' \dontrun{
+#' result <- reruning_windows_modelling(
+#'   z = 1,
+#'   bio_data = bio_data,
+#'   window_ranges_df = window_ranges_df,
+#'   rolling.data = rolling_climate,
+#'   formula_model = formula('log.seed ~ TMEAN'),
+#'   model_type = 'lm'
+#' )
+#' }
 #'
+#' @seealso \code{\link{save_window_ranges}}, \code{\link{reformat_climate_backtothepast}}, \code{\link{DescTools::CCC}}, \code{\link{broom::tidy}}
 #' @export
+
 reruning_windows_modelling = function(
   z,
   bio_data = bio_data,

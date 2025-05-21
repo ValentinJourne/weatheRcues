@@ -2,7 +2,7 @@
 % Please edit documentation in R/reruning_windows_modelling.R
 \name{reruning_windows_modelling}
 \alias{reruning_windows_modelling}
-\title{Re-run climate windows modeling for a specified sequence}
+\title{Re-run Climate Window Model for a Specific Window Sequence}
 \usage{
 reruning_windows_modelling(
   z,
@@ -16,56 +16,57 @@ reruning_windows_modelling(
 )
 }
 \arguments{
-\item{z}{Integer. The index representing the row number in the \code{window_ranges_df} data frame, which contains the window ranges for analysis.}
+\item{z}{Integer. The index (row) of the \code{window_ranges_df} data frame indicating which climate window to evaluate.}
 
-\item{bio_data}{Data frame. The biological site-level data, which contains
-seed production and other relevant variables for modeling. Default is \code{bio_data}.}
+\item{bio_data}{Data frame. Biological site-level data containing at least \code{year}, \code{sitenewname}, and \code{plotname.lon.lat}, as well as the response variable in \code{formula_model}.}
 
-\item{rolling.data}{Data frame. The climate data containing
-rolling temperature averages and other climate variables. Default is \code{rolling.data}.}
+\item{window_ranges_df}{Data frame. Contains window definitions (e.g., \code{window.open}, \code{window.close}) and optional metadata like \code{windows.sequences.number}.}
+
+\item{rolling.data}{Data frame. Rolling climate data with columns \code{days.reversed}, \code{year}, \code{LONGITUDE}, \code{LATITUDE}, and the climate covariate used in \code{formula_model}.}
+
+\item{formula_model}{Formula. A model formula (e.g., \code{log.seed ~ mean.temperature}) specifying the response and climate covariate to be modeled.}
+
+\item{model_type}{Character. The type of model to fit. Options are \code{"lm"} (default) for linear regression or \code{"betareg"} for beta regression.}
+
+\item{refday}{Integer. The reference day (day of year) from which \code{days.reversed} were calculated. Included for metadata.}
+
+\item{rollwin}{Integer. The size of the rolling window applied to the climate data. Included for metadata.}
 }
 \value{
-A data frame containing the model results, which include:
+A data frame (1 row) summarizing the model results for window \code{z}, including:
 \itemize{
-\item \code{sitenewname}: The name of the biological site.
-\item \code{plotname.lon.lat}: The plot name and its longitude/latitude.
-\item \code{reference.day}: The day used as the reference point for windowing.
-\item \code{windows.size}: The size of the window in days.
-\item \code{window.open}: Start of the window period (days before the reference day).
-\item \code{window.close}: End of the window period (days before the reference day).
-\item \code{intercept}: The intercept of the fitted linear model.
-\item \code{intercept.se}: Standard error of the intercept.
-\item \code{estimate}: The coefficient estimate for the temperature variable in the model.
-\item \code{estimate.se}: Standard error of the coefficient estimate.
-\item \code{pvalue}: P-value for the temperature coefficient.
-\item \code{r2}: R-squared value of the model.
-\item \code{AIC}: Akaike Information Criterion for the model.
-\item \code{nobs}: Number of observations used in the model.
-\item \code{nsequence.id}: The index corresponding to the window range used.
+\item Site info: \code{sitenewname}, \code{plotname.lon.lat}
+\item Window info: \code{window.open}, \code{window.close}, \code{windows.size}, \code{nsequence.id}
+\item Model results: \code{intercept.estimate}, \code{slope.estimate}, \code{pvalue}, \code{r2}, \code{AIC}, \code{sigma}, \code{nobs}
 }
 }
 \description{
-This function re-runs climate windows modeling for a given index \code{z}, extracting
-window ranges, filtering rolling temperature data, and merging it with biological
-site-level data to fit a linear model (\code{lm}) using a predefined formula.
+This function re-fits a regression model for a given climate window (defined by index \code{z}) using previously calculated window bounds.
+It aggregates the relevant climate covariate over the selected window, merges it with biological data, and fits a model (either linear or beta regression) to assess the effect.
 }
 \details{
 The function:
-\enumerate{
-\item Extracts the \code{window.open} and \code{window.close} values from the \code{window_ranges_df}
-for the specified index \code{z}.
-\item Filters \code{rolling.data} to retrieve climate data within the window range.
-\item Aggregates temperature data (mean temperature) for each combination of \code{LONGITUDE},
-\code{LATITUDE}, and \code{year}.
-\item Joins the filtered climate data with biological site-level data (\code{bio_data}).
-\item Fits a linear model (\code{lm}) using the combined data and the predefined formula \code{formula_model}.
-\item Returns a data frame with the model's coefficients, standard errors, p-values, R-squared, AIC,
-number of observations, and sequence ID.
+\itemize{
+\item Extracts the corresponding open/close bounds for window \code{z}.
+\item Aggregates the covariate over the selected time window.
+\item Joins the climate summary with biological observations by \code{year}.
+\item Fits the model and extracts relevant statistics (e.g., coefficients, R², AIC, etc.).
 }
+If \code{model_type = "betareg"}, ensure the response variable is bounded between 0 and 1.
 }
 \examples{
-# Assuming window_ranges_df, rolling.data, and bio_data are defined:
-result <- reruning_windows_modelling(1, bio_data = bio_data, rolling.data = rolling.data)
-print(result)
+\dontrun{
+result <- reruning_windows_modelling(
+  z = 1,
+  bio_data = bio_data,
+  window_ranges_df = window_ranges_df,
+  rolling.data = rolling_climate,
+  formula_model = formula('log.seed ~ TMEAN'),
+  model_type = 'lm'
+)
+}
 
+}
+\seealso{
+\code{\link{save_window_ranges}}, \code{\link{reformat_climate_backtothepast}}, \code{\link{DescTools::CCC}}, \code{\link{broom::tidy}}
 }

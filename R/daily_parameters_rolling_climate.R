@@ -1,62 +1,43 @@
-#' Run Moving Window Regression and Correlation Analysis
+#' Run a daily relationship between weather and biological variable
 #'
-#' This function performs a moving window analysis to explore how a climate covariate (e.g., temperature)
-#' influences a biological response (e.g., seed production) over time. It combines regression modeling and
-#' correlation testing within rolling windows to identify periods of strong climate-response relationships.
+#' This function performs a day-by-day analysis of the relationship between a rolling climate variable and a biological response (e.g., seed production). For each day (reversed day format), it fits a regression model and computes correlation metrics to identify lagged climate cues.
 #'
-#' @param bio_data A data frame or tibble containing biological data. Must include columns for `year`,
-#' `sitenewname`, `log.seed`, and optionally `plotname.lon.lat`.
-#' @param rolling.data A data frame or tibble with rolling climate variables. Must include a `days.reversed`
-#' column and a climate covariate (e.g., `rolling_avg_tmean`).
-#' @param method Character. The correlation method to use (`"spearman"`, `"pearson"`, or `"kendall"`).
-#' Default is `"spearman"`.
-#' @param formula_model A formula defining the relationship to be modeled (e.g., `log.seed ~ rolling_avg_tmean`).
-#' The response variable must exist in `bio_data`, and the predictor in `rolling.data`.
-#' @param model_type Character. Type of regression model to use. Options are `"lm"` (linear model, default) or `"betareg"`
-#' (beta regression for bounded outcomes between 0 and 1).
+#' @param bio_data A data frame containing biological data, including at minimum the columns `year`, `log.seed`, `sitenewname`, and `plotname.lon.lat`.
+#' @param rolling.data A data frame containing rolling climate data, including `days.reversed`, `year`, and the rolling climate covariate used in modeling.
+#' @param method Character. Correlation method used to estimate correlation coefficients. Options: `"spearman"` (default), `"pearson"`, or `"kendall"`.
+#' @param formula_model A formula indicating the response and predictor (e.g., `log.seed ~ TMEAN_rolling`). The response must exist in `bio_data`, and the predictor in `rolling.data`.
+#' @param model_type Character. Type of model to fit. Either `"lm"` (default) for linear regression or `"betareg"` for beta regression. The latter assumes the response is bounded between 0 and 1.
 #'
 #' @details
 #' The function:
 #' \itemize{
-#'   \item Merges biological data with rolling climate data.
-#'   \item Computes correlation coefficients and their p-values for each moving window.
-#'   \item Fits regression models for each time window and extracts slopes, standard errors, R², and log-likelihood.
-#'   \item Calculates standard error for the correlation using the sample size.
+#'   \item Merges `bio_data` and `rolling.data` by year.
+#'   \item Fits a linear or beta regression model for each unique value of `days.reversed`.
+#'   \item Extracts model slope, standard error, p-value, R², and log-likelihood.
+#'   \item Computes correlation and correlation standard error for each time point.
 #' }
 #'
-#' It is particularly useful for identifying lagged weather cues in time series datasets.
+#' This function is intended to help detect temporal weather cues influencing biological processes across time.
 #'
-#' @return A data frame including:
+#' @return A data frame containing:
 #' \itemize{
-#'   \item `sitenewname`, `plotname.lon.lat`: Site identifiers.
-#'   \item `days.reversed`: Time window in reversed day units.
-#'   \item `term`, `estimate`, `std.error`, `p.value`: Model slope summary.
-#'   \item `r.squared`, `logLik`: Model performance metrics.
-#'   \item `correlation`, `pvalue.cor`, `correlation.se`: Correlation stats.
+#'   \item \code{sitenewname}, \code{plotname.lon.lat}, \code{days.reversed}
+#'   \item Model estimates: \code{estimate}, \code{std.error}, \code{p.value}
+#'   \item Performance metrics: \code{r.squared}, \code{logLik}
+#'   \item Correlation results: \code{correlation}, \code{pvalue.cor}, \code{correlation.se}
 #' }
 #'
 #' @examples
-#' # Simulate small example
-#' data <- data.frame(
-#'   year = 2000:2019,
-#'   sitenewname = rep("site1", 20),
-#'   log.seed = rnorm(20),
-#'   plotname.lon.lat = rep("1_1", 20)
-#' )
-#' rolling.data <- data.frame(
-#'   days.reversed = 1:365,
-#'   rolling_avg_tmean = rnorm(365),
-#'   year = 2017
-#' )
-#' formula_used <- formula(log.seed ~ rolling_avg_tmean)
-#'
-#' result <- runing_moving_window_analysis(
-#'   bio_data = data,
-#'   rolling.data = rolling.data,
+#' \dontrun{
+#' result <- daily_parameters_rolling_climate(
+#'   bio_data = my_bio_df,
+#'   rolling.data = my_climate_rolling,
 #'   method = "spearman",
-#'   formula_model = formula_used
+#'   formula_model = log.seed ~ TMEAN_rolling
 #' )
+#' }
 #'
+#' @seealso \code{\link{runing_daily_relationship}}, \code{\link{cor.test}}, \code{\link[betareg]{betareg}}, \code{\link[broom]{tidy}}
 #' @export
 daily_parameters_rolling_climate = function(
   bio_data = bio_data,

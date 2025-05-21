@@ -2,7 +2,7 @@
 % Please edit documentation in R/runing_peak_detection.R
 \name{runing_peak_detection}
 \alias{runing_peak_detection}
-\title{Identify Weather Cue Windows Using Threshold-Based Peak Detection}
+\title{Detect Weather Cue Windows Using Peak Signal Detection}
 \usage{
 runing_peak_detection(
   lag = 100,
@@ -22,66 +22,67 @@ runing_peak_detection(
 )
 }
 \arguments{
-\item{lag}{Integer. The number of past observations used to compute the rolling mean and standard deviation
-in the thresholding algorithm. Larger values smooth the baseline. Default is 100.}
+\item{lag}{Integer. Number of past days used for calculating the rolling mean and standard deviation in the thresholding algorithm. Default is 100.}
 
-\item{threshold}{Numeric. The number of standard deviations a value must exceed the rolling mean to be
-considered a signal. Default is 3.}
+\item{threshold}{Numeric. Z-score threshold. A signal is detected if the product of slope × R² exceeds the rolling mean by this many standard deviations. Default is 3.}
 
-\item{influence}{Numeric between 0 and 1. Determines the influence of detected signals on the rolling
-statistics; 0 means no influence. Default is 0 (fully robust).}
+\item{influence}{Numeric between 0 and 1. Determines how strongly new signals influence the rolling statistics. \code{0} means no influence. Default is 0.}
 
-\item{tolerancedays}{Integer. Number of days allowed as gaps within a signal to still consider it part of
-a continuous window. Default is 7.}
+\item{tolerancedays}{Integer. Maximum gap (in days) between signals to be considered as part of the same window. Default is 7.}
 
-\item{refday}{Integer. Day of year used as a reference (e.g., 305 = Nov 1). Default is 305.}
+\item{refday}{Integer. Reference day-of-year (DOY) to count backwards from when building the climate window. Default is 305 (Nov 1).}
 
-\item{lastdays}{Integer. Number of days before \code{refday} to include in the analysis. Default is 600.}
+\item{lastdays}{Integer. Number of days to look back from \code{refday}. Default is 600.}
 
-\item{rollwin}{Integer. Window size for rolling average in climate data. Default is 1.}
+\item{rollwin}{Integer. Size of the rolling window for climate data smoothing. Default is 1.}
 
-\item{siteforsub}{Character. Unique site identifier (e.g., "longitude=16.71_latitude=53.09").}
+\item{siteforsub}{Character. Unique site identifier used for labeling output. Should match identifiers in \code{bio_data}.}
 
-\item{climate_data}{Data frame. Daily climate data, must include a \code{year} column and the covariate(s) used
-in modeling (e.g., \code{TMEAN}).}
+\item{climate_data}{Data frame of daily climate data. Must include \code{year}, \code{yday}, and the climate variable used in \code{formula_model}.}
 
-\item{Results_days}{Data frame. Output from CSP analysis including slope (\code{estimate}) and R² (\code{r.squared})
-columns for each day.}
+\item{Results_days}{Data frame. Output from a daily sensitivity analysis (e.g., CSP), must contain \code{estimate} (slope) and \code{r.squared} columns.}
 
-\item{bio_data}{Data frame. Biological data for the site (e.g., seed production), must include \code{plotname.lon.lat},
-\code{Year}, and modeled response variable (e.g., \code{log.seed}).}
+\item{bio_data}{Data frame of biological observations, including \code{year}, the response variable, and site identifiers such as \code{plotname.lon.lat}.}
 
-\item{yearneed}{Integer. Number of years required for cross-validation or fitting. Default is 2.}
+\item{yearneed}{Integer. Number of years needed prior to each observation to compute rolling climate data. Default is 2.}
 
-\item{formula_model}{Formula. The model to fit (e.g., \code{log.seed ~ TMEAN}). Default is \code{log.seed ~ TMEAN}.}
+\item{formula_model}{Formula. The model formula to be used for evaluation (e.g., \code{log.seed ~ TMEAN}).}
 
-\item{model_type}{Character. Type of model to fit. Either \code{"lm"} or \code{"gam"}. Default is \code{"lm"}.}
+\item{model_type}{Character. Type of model to fit. One of \code{"lm"} (linear regression) or \code{"betareg"} (beta regression). Default is \code{"lm"}.}
 }
 \value{
-A data frame with model summaries (e.g., slope, R², AIC) for each identified cue window. If no
-significant windows are found, the function returns an empty object or message.
+A data frame summarizing model fit statistics for each identified cue window, including:
+\itemize{
+\item \code{window.open}, \code{window.close}
+\item Model coefficients and significance, and other metrics like R2 and AIC
+\item Site identifiers
+}
 }
 \description{
-This function identifies potential weather cue windows from climate data using a thresholding algorithm
-applied to the product of slope and R² values obtained from a prior CSP (climate sensitivity profile) analysis.
-Peaks are identified when this product exceeds a specified threshold of deviation from a moving average.
+This function identifies influential weather cue windows based on a peak signal detection algorithm applied
+to the product of regression slope and R² values over time. It detects peaks where signal strength significantly
+deviates from the local mean using a z-score thresholding method, then fits models (e.g., linear regression) over
+these periods to evaluate biological-climate relationships.
 }
 \details{
-The function applies a z-score-based peak detection algorithm to identify the most informative time windows
-based on signal strength (product of slope and R² from CSP). These windows are then evaluated using linear or
-generalized additive models over historical climate data.
+The function calculates a signal vector using a rolling z-score approach on the product of slope and R² from daily regressions.
+Significant signals are grouped into windows, which are then used to aggregate historical climate data and fit predictive models.
+Model performance metrics are extracted using \code{reruning_windows_modelling()}.
 }
 \examples{
 \dontrun{
-result <- runing_peak_detection_site(
-  lag = 100,
-  threshold = 3,
-  influence = 0,
-  siteforsub = "longitude=16.71_latitude=53.09",
+result <- runing_peak_detection(
+  lag = 30,
+  threshold = 2.5,
+  influence = 0.1,
   climate_data = climate_df,
-  Results_days = csp_output,
-  bio_data = seed_data
+  Results_days = csp_results,
+  bio_data = seed_data,
+  formula_model = formula(log.seed ~ TMEAN)
 )
 }
 
+}
+\seealso{
+\code{\link{Thresholding_algorithm}}, \code{\link{reruning_windows_modelling}}, \code{\link{runing_csp}}, \code{\link{reformat_climate_backtothepast}}
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/runing_daily_relationship.R
 \name{runing_daily_relationship}
 \alias{runing_daily_relationship}
-\title{Perform Moving Window Analysis for a Specific Site}
+\title{Run Daily Rolling Climate-Response Analysis}
 \usage{
 runing_daily_relationship(
   bio_data,
@@ -16,50 +16,54 @@ runing_daily_relationship(
 )
 }
 \arguments{
-\item{bio_data}{A data frame containing seed count and site-level information, including \code{plotname.lon.lat} and \code{log.seed}.}
+\item{bio_data}{A data frame containing the biological response data. Must include the response variable defined in \code{formula_model}, \code{year}, and a site identifier.}
 
-\item{lastdays}{An integer specifying the number of days to consider in the rolling window analysis.}
+\item{climate_data}{A data frame of daily climate values. Must include columns for \code{year}, \code{yday}, and the climate variable defined in \code{formula_model}.}
 
-\item{formula_model}{A formula specifying the model to fit for each moving window. Default is \code{formula('log.seed~rolling_avg_tmean')}.}
+\item{lastdays}{Integer. Number of days before the reference day to include in the rolling analysis. For example, \code{lastdays = 365} evaluates the full previous year.}
 
-\item{site.name}{A string specifying the site name for which to perform the analysis. This should match entries in the \code{plotname.lon.lat} column of \code{bio_data}.}
+\item{formula_model}{A formula specifying the model to fit (e.g., \code{log.seed ~ TMEAN}). The right-hand side is used to extract the relevant climate variable.}
 
-\item{climate.path}{A string specifying the path to the directory containing climate data files. These files should include the site name in their names.}
+\item{refday}{Integer. Reference day-of-year (DOY) from which to compute days backwards. Default is 305 (November 1st).}
+
+\item{yearneed}{Integer. Minimum number of years to retain when evaluating historical climate data. Default is 2.}
+
+\item{model_type}{Character. Type of model to fit: either \code{'lm'} (linear regression) or \code{'betareg'} (beta regression). Default is \code{'lm'}.}
+
+\item{rollwin}{Integer. Size of the rolling average window applied to the climate variable. Default is 1 (i.e., daily resolution without smoothing).}
 }
 \value{
-A data frame containing the results of the moving window analysis for the specified site. Includes correlation coefficients, model coefficients, and other relevant statistics.
+A data frame containing one row per day (reversed time), with columns:
+\itemize{
+\item \code{days.reversed}: Days before the reference date.
+\item \code{estimate}, \code{p.value}, \code{r.squared}: Model coefficients and fit statistics.
+\item \code{correlation}, \code{pvalue.cor}: Spearman or Pearson correlation between the response and climate variable.
+}
 }
 \description{
-This function performs a moving window analysis on seed and climate data for a specific site. It involves loading and formatting climate data, applying rolling window functions or not if set rolling at 1 - as done in our study, and then running a moving window analysis to investigate the relationship between seed count and climate variables.
+This function performs a daily moving window analysis to estimate the relationship between a biological response (e.g., seed production)
+and daily climate variables. For each day prior to a reference date, the function computes a rolling average climate value and fits a model
+(e.g., linear or beta regression) to estimate effect sizes and correlation with the biological variable.
 }
 \details{
-The function performs the following steps:
-\itemize{
-\item Loads and formats the biological data for the specified site.
-\item Loads and formats the climate data, including scaling the climate variables.
-\item Defines the period for rolling climate data based on a specified number of years.
-\item Applies a rolling window function to the climate data for each year in the defined period.
-\item Runs a moving window analysis using the \code{runing.movingwin.analysis} function.
-}
+This function aligns climate data with biological observations across years. It applies a rolling average to the climate variable over
+the specified \code{lastdays}, centered on each day before \code{refday}. For each day, the function fits a univariate model using the
+provided \code{formula_model}, returning slope estimates, correlation statistics, and model fit metrics.
+
+This is the preparatory step for methods like the Climate Sensitivity Profile (CSP) or peak signal detection.
 }
 \examples{
-# Example usage:
-site_name <- 'Site1'
-Fagus_seed <- data.frame(
-  plotname.lon.lat = rep(c('Site1', 'Site2'), each = 10),
-  log.seed = rnorm(20),
-  year = rep(2000:2009, 2)
+\dontrun{
+result <- runing_daily_relationship(
+  bio_data = seed_data,
+  climate_data = climate_data,
+  lastdays = 365,
+  refday = 305,
+  formula_model = formula('log.seed ~ TMEAN')
 )
-climate_beech_path <- 'path/to/climate/data'
-last_days <- 30
-my_form <- formula('log.seed~rolling_avg_tmean')
+}
 
-result <- site.moving.climate.analysis(
-  site.name = site_name,
-  bio_data = Fagus_seed,
-  climate.path = climate_beech_path,
-  lastdays = last_days,
-  formula_model = my_form
-)
-
+}
+\seealso{
+\code{\link{runing_csp}}, \code{\link{runing_peak_detection}}, \code{\link{daily_parameters_rolling_climate}}
 }

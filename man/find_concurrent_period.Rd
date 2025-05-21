@@ -2,9 +2,7 @@
 % Please edit documentation in R/find_concurrent_period.R
 \name{find_concurrent_period}
 \alias{find_concurrent_period}
-\title{Perform Climate Window Analysis - based on Climate sensitivity profil from Thackeray et al
-note that some function have been obtained or adjusted from Thackeray et al paper OR also from Simmonds et al
-Find Concurrent Periods with Extreme Averages}
+\title{Perform Climate Window Analysis - based on Climate sensitivity profil from Thackeray et al}
 \usage{
 find_concurrent_period(temp_window, pred_C)
 }
@@ -18,6 +16,7 @@ A numeric vector representing the temperature window where the average of the ab
 }
 \description{
 This function identifies periods within a given temperature window where the average of predicted coefficients is most extreme. The periods are determined based on gaps in sequential dates and are selected based on the maximum average of the absolute values of the predicted coefficients.
+note that some function have been obtained or adjusted from Thackeray et al paper OR also from Simmonds et al.
 }
 \details{
 The function first calculates the differences between consecutive dates in \code{temp_window} and identifies gaps greater than 1. It then segments the temperature window into periods based on these gaps. Each segment is assigned a unique identifier. The function then computes the mean absolute value of predicted coefficients for each segment and selects the period with the maximum average. This period is returned as the most extreme.

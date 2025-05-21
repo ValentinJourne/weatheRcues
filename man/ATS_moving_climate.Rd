@@ -2,7 +2,7 @@
 % Please edit documentation in R/ATS_moving_climate.R
 \name{ATS_moving_climate}
 \alias{ATS_moving_climate}
-\title{Main Function of correlation - regression and process accross all sites}
+\title{Perform Daily Relationship Analysis Across all Time Series (ATS)}
 \usage{
 ATS_moving_climate(
   bio_data_all,
@@ -15,44 +15,57 @@ ATS_moving_climate(
 )
 }
 \arguments{
-\item{climate.path}{A string specifying the path to the directory containing climate data files. These files should be named according to the site names.}
+\item{bio_data_all}{A data frame containing biological data across multiple sites. Must include columns like \code{sitenewname}, \code{plotname.lon.lat}, \code{log.seed}, and \code{year}.}
 
-\item{refday}{An integer representing the reference day for the rolling window analysis. Default is 305.}
+\item{climate.path}{Character. File path to the folder containing site-level climate data files. File names should include the site identifiers.}
 
-\item{lastdays}{An integer specifying the number of days to include in the rolling window analysis. Default is the maximum of a specified range.}
+\item{refday}{Integer. Reference day of the year from which backward windows are computed (e.g., 305 = November 1). Default is 305.}
 
-\item{rollwin}{An integer specifying the rolling window size. Default is 1.}
+\item{lastdays}{Integer. Number of days before \code{refday} to consider in the rolling window. Default is 700.}
 
-\item{seed.data}{A data frame containing seed count and site-level information. It should include a column \code{plotname.lon.lat} to specify site names and a column \code{log.seed} for seed counts.}
+\item{rollwin}{Integer. Size of the rolling window used to smooth climate variables. Default is 1 (no smoothing).}
+
+\item{formula_model}{Formula. A formula specifying the biological response and climate predictor (e.g., \code{log.seed ~ TMEAN}). Default is \code{log.seed ~ TMEAN}.}
+
+\item{model_type}{Character. Either \code{"lm"} or \code{"betareg"} indicating which model to fit per day. Default is \code{"lm"}.}
 }
 \value{
-A data frame containing the results of the moving window analysis for all sites. Includes correlation coefficients, model coefficients, and other relevant statistics for each site.
+A data frame containing results from daily moving window models for each site, including slope estimates, correlation coefficients, and R² values for each day.
 }
 \description{
-This function applies the moving climate analysis to all sites listed in the \code{seed.data} data frame. It iterates over each site, performs the moving window analysis, and combines the results into a single data frame.
+This function performs moving window correlation/regression analysis across all sites in a biological dataset.
+For each site, it loads the corresponding climate data, applies rolling climate smoothing, and runs the \code{runing_daily_relationship()} function
+to extract day-wise associations between climate variables and biological responses.
 }
 \details{
-The function performs the following steps:
+For each site, this function:
 \itemize{
-\item Identifies unique site names from the \code{seed.data} data frame.
-\item Applies the \code{site.moving.climate.analysis} function to each site using the unique site names.
-\item Combines the results from all sites into a single data frame.
+\item Subsets the biological data for that site.
+\item Loads the corresponding climate file from \code{climate.path} using \code{format_climate_data()}.
+\item Applies \code{runing_daily_relationship()} to generate slope, R², and correlation time series.
+\item Aggregates results across all sites into a single tidy output.
 }
 }
 \examples{
-# Example usage:
-Fagus_seed <- data.frame(
-  plotname.lon.lat = rep(c('Site1', 'Site2'), each = 10),
+\dontrun{
+bio_data <- data.frame(
+  sitenewname = rep(c("site1", "site2"), each = 10),
+  plotname.lon.lat = rep(c("site1", "site2"), each = 10),
   log.seed = rnorm(20),
   year = rep(2000:2009, 2)
 )
-climate_beech_path <- 'path/to/climate/data'
-result <- FULL.moving.climate.analysis(
-  seed.data = Fagus_seed,
-  climate.path = climate_beech_path,
-  refday = 305,
-  lastdays = 30,
-  rollwin = 1
-)
 
+results <- ATS_moving_climate(
+  bio_data_all = bio_data,
+  climate.path = "data/climate/",
+  refday = 305,
+  lastdays = 600,
+  rollwin = 1,
+  formula_model = log.seed ~ TMEAN
+)
+}
+
+}
+\seealso{
+\code{\link{runing_daily_relationship}}, \code{\link{format_climate_data}}
 }

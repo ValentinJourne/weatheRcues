@@ -19,25 +19,26 @@
 #' print(longest_sequence) # Prints: [1, 2, 3]
 #' print(all_sequences)    # Prints: [[1, 2, 3], [5, 6, 7], [10, 11, 12]]
 #'
+#'@export
 extract_consecutive_sequences <- function(values, keep_all = FALSE) {
   # Initialize variables
   sequences <- list()
   current_sequence <- integer(0)
-  
+
   # Iterate through the values
-  #if does not match afte +1 then it will create new sequence length 
+  #if does not match afte +1 then it will create new sequence length
   for (i in seq_along(values)) {
     if (i == 1 || values[i] == values[i - 1] + 1) {
       current_sequence <- c(current_sequence, values[i])
     } else {
       sequences <- c(sequences, list(current_sequence))
-      current_sequence <- values[i]  # Start new sequence
+      current_sequence <- values[i] # Start new sequence
     }
   }
-  
+
   # Add the last sequence
   sequences <- c(sequences, list(current_sequence))
-  
+
   if (!keep_all) {
     # Find the longest sequence
     longest_sequence <- sequences[[which.max(lengths(sequences))]]
