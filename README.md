@@ -67,7 +67,7 @@ library("weatheRcues")
 package:
 
 - the [Get
-  started](https://ValentinJourne.github.io/weatheRcues/vignettes/weatheRcues.html)
+  started](https://ValentinJourne.github.io/weatheRcues/articles/weatheRcues.html)
   vignette describes the core features of the package. Additional
   information about the methods can be found in Journé et al (in prep)
 
