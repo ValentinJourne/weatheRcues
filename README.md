@@ -4,8 +4,11 @@
 # weatheRcues <img src="man/figures/icon.jpeg" align="right" style="float:right; height:120px;"/>
 
 <!-- badges: start -->
+
 <!-- badges: end -->
+
 <p align="left">
+
 • <a href="#overview">Overview</a><br> •
 <a href="#features">Features</a><br> •
 <a href="#installation">Installation</a><br> •
@@ -58,18 +61,13 @@ library("weatheRcues")
 
 ## Get started
 
-For an overview of the main features of `weatheRcues`, please read the
-[Get
-started](https://ValentinJourne.github.io/weatheRcues/articles/weatheRcues.html)
-vignette.
-
 ## Long-form documentations
 
 `weatheRcues` provides for now one vignette to learn more about the
 package:
 
 - the [Get
-  started](https://ValentinJourne.github.io/weatheRcues/articles/weatheRcues.html)
+  started](https://ValentinJourne.github.io/weatheRcues/vignettes/weatheRcues.html)
   vignette describes the core features of the package. Additional
   information about the methods can be found in Journé et al (in prep)
 
@@ -84,16 +82,16 @@ Please cite `weatheRcues` as:
 And for the main study reference as:
 
 > Journé Valentin, Emily G. Simmonds, Maciej Barczyk, Michał Bogdziewicz
-> (2025) What is the best method to identify weather cues in forest tree
-> reproduction?
+> (2025) Comparing statistical methods for detecting climatic drivers of
+> mast seeding
 
 ## Contributing
 
-This code is mostly based on previous code, studies, etc (see Journé et
-al, in prep for more details). Feel free to adapt and modify the code
-for your own analyses and testing. If you have any questions,
-suggestions, or have any issues with the code and analysis, please do
-not hesitate to contact us.
+This code is mostly based on previous code and studies done on European
+beech tree (see Journé et al, in prep for more details). Feel free to
+adapt and modify the code for your own analyses and testing. If you have
+any questions, suggestions, or have any issues with the code and
+analysis, please do not hesitate to contact us.
 
 ## Acknowledgments
 

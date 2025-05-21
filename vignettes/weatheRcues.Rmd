@@ -12,56 +12,72 @@ knitr::opts_chunk$set(collapse = TRUE,
                       comment  = "#>")
 ```
 
-
 ```{r setup}
-library(mgcv)
 library(weatheRcues)
-
+library(tidyverse)
+library(mgcv)
+library(lubridate)
 ```
 
-Here I simulated some climate and seed production (because we all love seed production and want to know more about plant mast seeding). If you are studying small mammals, please study mast seeding :D 
-```{r generatedata, echo=FALSE, results='hide'}
+# Introduction
+
+The `weatheRcues` package helps detect biologically relevant weather cue windows—specific periods where climate variables (e.g., temperature, rainfall) best explain biological responses such as seed production. Here we demonstrate how to apply four major methods:
+
+1.  Sliding Time Window (climwin)
+
+2.  P-spline Regression
+
+3.  Climate Sensitivity Profile
+
+4.  Peak Signal Detection
+
+We will first simulate climate and seed data (because we all love seed production and want to know more about plant mast seeding) to illustrate each method.
+
+# Simulation
+
+We generate one weather cue window from June 150–160 (DOY) to influence seed production.
+
+```{r generatedata, echo=T, results='hide'}
 library(tidyverse)
 set.seed(123)  
 startyear = 1940
 years <- startyear:2020
 days_per_year <- 365
+
+#ok so now just generate climate for a long time.
+#I will add yday, but also, the way I coded the function (for now) you need to have LONGITUDE AND LATITUDE columns
 climate_data_simulated <- data.frame(
   date = seq.Date(from = as.Date(paste0(startyear,"-01-01")), by = "day", length.out = length(years) * days_per_year),
-  temp = runif(length(years) * days_per_year, min = 10, max = 30) 
-)
-
-climate_data_simulated <- climate_data_simulated %>%
-  mutate(year = format(date, "%Y"),
-         yday = yday(date),
-         year = as.numeric(year)) %>%
-  mutate(across(c(temp), scale)) %>%
-  mutate(across(c(temp), as.vector)) %>% 
-  mutate(LONGITUDE = NA, LATITUDE = NA)
+  temp = runif(length(years) * days_per_year, min = 10, max = 30)
+) %>%
+  mutate(
+    year = as.numeric(format(date, "%Y")),
+    yday = yday(date),
+    temp = scale(temp)[,1],
+    LONGITUDE = NA,
+    LATITUDE = NA
+  )
 
 # Select ~ one week in June 
 june_week <- climate_data_simulated %>%
   filter(yday >= 150 & yday <= 160)
 
+#now you can simulate you seed production (here I used parameters I observed). For seed production data, you also need to have additional column, Date2, with this d-m-Y format and two other column, plotname.lon.lat and sitenewname. I will try to fix this later, I used this to be sure my time series are matching climate location. I also selected one year less (to have sure that climate would be enough years) 
 seed_production_simulated <- june_week %>%
   group_by(year) %>%
-  summarise(mean_temp_june_week = mean(temp)) %>%
-  # Standardize the mean temperature for proper correlation, as in the main analysis
-  mutate(mean_temp_scaled = scale(mean_temp_june_week, center = TRUE, scale = TRUE)) %>%
-  # Generate log.seed with controlled correlation
-  mutate(log.seed = 1 + 5 * mean_temp_scaled + rnorm(n(), mean = 0, sd = 1))%>%
-  filter(year > startyear)%>% #to select one year less 
-  mutate(year = as.numeric(as.character(year))) %>% 
-  mutate(Date = paste0( "15/06/",year)) %>% #need a date, even if absolute window
-  mutate(Date2 = strptime(as.character(Date), format = "%d/%m/%Y"))  %>%
-  dplyr::mutate(across(c(mean_temp_scaled, log.seed), as.vector)) %>% 
-  mutate(plotname.lon.lat = "test",
-         sitenewname = "test")#remove the vector type 
-  
-
+  summarise(mean_temp = mean(temp)) %>%
+  mutate(
+    log.seed = 1 + 5 * scale(mean_temp)[,1] + rnorm(n(),mean =0, sd=1),
+    Date2 = as.POSIXct(paste0(year, "-06-15")),
+    sitenewname = "test",
+    plotname.lon.lat = "test") %>% 
+    filter(year > startyear) 
 ```
 
-For the first method, I was using climwin R package. Here I customize a bit the function, but you can specify more option (for aggregate weather window for example).
+# Sliding Time Window
+
+For the first method, I was using climwin R package. Here I customize a bit the function, but you can specify more option (for aggregate weather window for example). Please refer to *Bailey and van de Pol, 2016, PlosOne, climwin: An R Toolbox for Climate Window Analysis*.
+
 ```{r slidingwindow}
 head(seed_production_simulated)
 head(climate_data_simulated)
@@ -70,7 +86,7 @@ climwin.output = runing_climwin(
         climate_data = climate_data_simulated,
         bio_data = seed_production_simulated,
         site.name = 'test',
-        range = c(10, 0), #double check if climate is long enough (to match bio data)
+        range = c(200, 0), #double check if climate is long enough (to match bio data)
         cinterval = 'day',
         refday = c(01, 11),
         optionwindows = 'absolute',
@@ -78,11 +94,12 @@ climwin.output = runing_climwin(
       )
 
 climwin.output
-
+#in case you can change the option to give.clean = FALSE, it will give you all models outputs from `climwin::slidingwin`
 ```
 
-The others method, the idea is to make a correalation for each days with your variable of interest. 
+# P-Spline regression
 
+P-splines model day-specific weather effects and apply a penalty to smooth consecutive coefficients. Here we got some issues, if data is too noisy (which is often the case with seed production in trees) or too short time series. But it is consider as one of the robust method if you are using phenological datasets (see another application in *Simmonds et al, Journal of Animal Ecology, 2019*).
 
 ```{r PSR}
 head(seed_production_simulated)
@@ -92,7 +109,7 @@ pspline.output = runing_psr(
   bio_data = seed_production_simulated,
   site = 'test',
   climate_data = climate_data_simulated,
-  lastdays = 10,
+  lastdays = 170,
   refday = 305,
   rollwin = 1,
   formula_model = formula('log.seed ~ temp'),
@@ -105,39 +122,73 @@ pspline.output = runing_psr(
 pspline.output
 ```
 
+# Climate Sensitivity Profile
 
-```{r CSP and Peak}
+This method performs a daily regression, extracting $R^2$ and slope over time, and fits two GAMs to smooth the results. Cue windows are defined by where both metrics exceed thresholds. First step here is to run a daily relationship.
+
+```{r run daily models}
 head(seed_production_simulated)
 head(climate_data_simulated)
 
 daily.relation.res = runing_daily_relationship(
   bio_data = seed_production_simulated,
   climate_data = climate_data_simulated,
-  lastdays = 50,
+  lastdays = 170,
   refday = 305,
   rollwin = 1,
   formula_model = formula('log.seed ~ temp'),
   yearneed = 1
 )
 
+
+#here you have a function to make a calendar matching DOY and days reversed. 
+calendar = generate_reverse_day_calendar(refday = 305, lastdays = 180, yearback = 1)
+#daily.relation.res %>% left_join(calendar)
+#You can also have a small fancy plot 
+
+plot_daily_relation(
+  daily.relation.res,
+  calendar,
+  x_axis = "reversed.day", #can change to doy or reversed.day
+  whattoplot = "estimate",
+  highlight_window = c(160, 150),#here it is close, but remember it is a simulation...
+)
+  
+```
+
+And now let's try the climate sensitivity profile.
+
+```{R CSP}
+#here it is CSP method
 csp.out = runing_csp(Results_days =daily.relation.res,
            bio_data = seed_production_simulated,
            climate_data= climate_data_simulated,
            siteneame.forsub = "test",
            refday = 305,
-           lastdays = 50,
+           lastdays = 170,
            rollwin = 1, yearneed = 1,
            k.provided = -1, #by default please keep na, here is just a test to make it fast
            formula_model = formula('log.seed ~ temp'), optim.k = F, option.check.name = F)
 csp.out
+```
+
+# Peak detection method
+
+Peak signal detection identifies days with highest $R^2 \times$ slope signal strength. It is quick method, but might be sensitive if you have multiple peaks (i.e multiple windows can be detected). It will work like a moving window after runing correlation to each days. Here you can adjust parameters lag, that will basically search cues after a number of lag day (here we specified 50). Then by increasing the threshold, you will basically select only the highest peak of correlation.
+
+```{R peak}
 peak.out = runing_peak_detection(Results_days = daily.relation.res,
            bio_data = seed_production_simulated,
            climate_data = climate_data_simulated,
            refday = 305,
-           lastdays = 50,
+           lastdays = 170,
            rollwin = 1, yearneed = 1,formula_model = formula('log.seed ~ temp'),
-           lag = 10,
-           threshold = 0,
+           lag = 50,
+           threshold = 4,
   tolerancedays = 7)
 peak.out
+
+
 ```
+
+Again, if you arrived here, these methods are available thanks to all previous research done on this topic (i.e detecting environmental cues), and we tried to make some of these methods more accessible to a broader audience. But we have still some improvement to make and would be happy to hear other advice ;)
