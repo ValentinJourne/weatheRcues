@@ -1,7 +1,7 @@
 Package: weatheRcues
 Type: Package
 Title: The Title of the Project
-Version: 0.0.0.9000
+Version: 0.1.0
 Authors@R: c(
     person(given   = "Valentin",
            family  = "Journé",
@@ -30,7 +30,6 @@ Imports:
     forcats,
     foreach,
     furrr,
-    geomtextpath,
     gghalves,
     ggplot2,
     ggpubr,

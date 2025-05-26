@@ -5,14 +5,14 @@ library(mgcv)
 #add_license('CC BY 4.0')
 #add_readme_rmd(given = 'Valentin', family = 'Journé')
 # add_code_of_conduct(email = 'journe.valentin@gmail.com')
-# add_citation(
-#   given = 'Valentin',
-#   family = 'Journé',
-#   organisation = 'Forest Biology Center, Adam Mickiewicz University',
-#   open = TRUE,
-#   overwrite = FALSE,
-#   quiet = FALSE
-# )
+add_citation(
+  given = 'Valentin',
+  family = 'Journé',
+  organisation = 'Department of Biology, Faculty of Science, Kyushu University, Fukuoka, Japan',
+  open = TRUE,
+  overwrite = FALSE,
+  quiet = FALSE
+)
 add_dependencies('.')
 devtools::load_all(here::here())
 devtools::document()

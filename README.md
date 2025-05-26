@@ -76,7 +76,7 @@ package:
 Please cite `weatheRcues` as:
 
 > Journé Valentin (2025) weatheRcues: a companion to identify weather
-> cues in seed production. R package version 0.0.0.9000.
+> cues in seed production. R package version 0.0.1.
 > <https://github.com/ValentinJourne/weatheRcues/>
 
 And for the main study reference as:
