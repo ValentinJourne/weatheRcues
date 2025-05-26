@@ -1,3 +1,5 @@
+#function to format MASTREE data focusing on fagus syvlatica. It is a standard procedure for filtering
+#if you want to know more about the reason, please check in Journe et al, New Phytologist, 2023 and Journe et al, Nature Communication, 2023
 formatting_mastree_fagus = function(mastreedata) {
   mastreedata %>%
     filter(
@@ -40,6 +42,7 @@ formatting_mastree_fagus = function(mastreedata) {
     as.data.frame()
 }
 
+#format to get collection method of seed production
 obtained_cleaned_method_collection = function(data) {
   data %>%
     group_by(sitenewname, Country, Collection_method, Length) %>%
@@ -444,6 +447,7 @@ run_sampling_fraction_all_methods <- function(
 }
 
 
+#function to run simulation in parallel
 simulation_runing_window_parallel <- function(
   climate_data_simulated = climate_data_simulated,
   results_list_fakedata = results_list_fakedata,
@@ -544,7 +548,7 @@ simulation_runing_window_parallel <- function(
         siteforsub = as.character(k),
         climate_data = climate_data_simulated,
         Results_days = run.sim.day.res,
-        myform.fin = formula('log.seed ~ TMEAN'),
+        formula_model = formula('log.seed ~ TMEAN'),
         bio_data = results_list_fakedata[[k]] %>% dplyr::select(-TMEAN),
         yearneed = 1
       ) %>%
@@ -555,12 +559,12 @@ simulation_runing_window_parallel <- function(
       statistics_psr_method.simulated <- runing_psr(
         bio_data = results_list_fakedata[[k]] %>% dplyr::select(-TMEAN),
         site = as.character(k),
-        climate_csv = climate_data_simulated,
+        climate_data = climate_data_simulated,
         lastdays = 365,
         refday = 305,
         rollwin = 1,
         formula_model = formula('log.seed ~ TMEAN'),
-        matrice = c(3, 1),
+        matrice = c(2, 1),
         knots = NULL,
         tolerancedays = 7,
         yearneed = 1
@@ -612,7 +616,11 @@ simulation_runing_window_parallel <- function(
   if (save == TRUE) {
     qs::qsave(
       fin.sim,
-      here(paste0('outputs/result_simulations', lubridate::today(), '.qs'))
+      here(paste0(
+        'Application_MASTREE/outputs/result_simulations',
+        lubridate::today(),
+        '.qs'
+      ))
     )
   }
   return(fin.sim)

@@ -142,7 +142,7 @@ beech.site.all = unique(Fagus.seed$plotname.lon.lat)
 # Define a function to process each fagus site
 #option to run in parallel to make it faster (faster than map_dfr, but need double checking because if not well defined = issues)
 #because it takes some time you can use directly the last file and upload it directly to the session
-run.climwin <- T
+run.climwin <- F
 #take some time ! more than 1 h
 if (run.climwin == T) {
   library(furrr)
@@ -489,7 +489,7 @@ windows.avg = output_fit_summary.basic.best %>%
   bind_rows(
     statistics_absolute_climwin %>%
       dplyr::select(sitenewname, window.open, window.close) %>%
-      mutate(method = 'Sliding time window')
+      mutate(method = 'Sliding window')
   ) %>%
   bind_rows(
     output_fit_summary.best.csp %>%
@@ -533,7 +533,7 @@ median.windows.plot = windows.avg %>%
         "Climate sensitivity profile",
         "P-spline regression",
         "Peak signal detection",
-        "Sliding time window"
+        "Sliding window"
       ))
     ),
     windows.type = factor(
@@ -607,7 +607,7 @@ bestr2 = output_fit_summary.basic.best %>%
   bind_rows(
     statistics_absolute_climwin %>%
       dplyr::select(sitenewname, r2, AIC) %>%
-      mutate(method = 'Sliding time window')
+      mutate(method = 'Sliding window')
   ) %>%
   bind_rows(
     output_fit_summary.best.csp %>%
@@ -627,19 +627,24 @@ bestr2 %>%
 #for density plot
 mean_r2 <- bestr2 %>%
   group_by(method) %>%
-  summarise(median_r2 = median(r2, na.rm = TRUE), mean_r2 = mean(r2, na.rm = T))
+  summarise(
+    median_r2 = median(r2, na.rm = TRUE),
+    mean_r2 = mean(r2, na.rm = T)
+  ) %>%
+  arrange(mean_r2)
+mean_r2$y_label <- seq(5.4, 6.2, length.out = nrow(mean_r2))
 
 averagedensr2method = bestr2 %>%
   ggplot(aes(x = r2, fill = method, col = method)) +
   geom_density(alpha = 0.2, size = .8) +
   labs(x = expression(R^2), y = "Density") +
   ggpubr::theme_pubclean() +
-  geomtextpath::geom_textvline(
+  geom_vline(
     data = mean_r2,
-    aes(label = round(mean_r2, 3), color = method, xintercept = mean_r2),
-    vjust = -0.3,
-    hjust = 1,
-    fontface = 'bold',
+    aes(color = method, xintercept = mean_r2), #label = round(mean_r2, 3), with geomtextpath::
+    #vjust = -0.3,
+    #hjust = 1,
+    #fontface = 'bold',
     linetype = 'dashed',
     show.legend = FALSE
   ) +
@@ -653,8 +658,20 @@ averagedensr2method = bestr2 %>%
     legend.text = element_text(size = 12),
     axis.text = element_text(size = 13),
     axis.title = element_text(size = 14)
+  ) +
+  geom_text(
+    data = mean_r2,
+    aes(
+      x = mean_r2,
+      y = y_label,
+      label = round(mean_r2, 3),
+      color = method
+    ),
+    vjust = -0.5,
+    angle = 0,
+    fontface = "bold",
+    show.legend = FALSE
   )
-
 averagedensr2method
 
 #make a plot for main figure
@@ -728,14 +745,14 @@ if (dont.run.this.long.process == F) {
   qs::qsave(
     result_list,
     here(paste0(
-      "Application_MASTREE/outputs/year.selection.testing.psr.",
+      "Application_MASTREE/outputs/year.selection.testing.",
       today(),
       ".qs"
     ))
   )
 } else {
   result_list = qs::qread(here(
-    "Application_MASTREE/outputs/year.selection.testing.psr.2025-05-20.qs"
+    "Application_MASTREE/outputs/year.selection.testing.2025-05-20.qs"
   ))
 }
 
@@ -747,7 +764,7 @@ summary.sample.size = rbind(
   mutate(
     method = recode(
       method,
-      "climwin" = "Sliding time window",
+      "climwin" = "Sliding window",
       "csp" = "Climate sensitivity profile",
       "psr" = "P-spline regression",
       'signal' = 'Peak signal detection'
@@ -898,7 +915,7 @@ summary.sample.size %>% filter(source == 20)
 summary.sample.size %>%
   filter(method == "Climate sensitivity profile") %>%
   View()
-summary.sample.size %>% filter(method == "Sliding time window") %>% View()
+summary.sample.size %>% filter(method == "Sliding window") %>% View()
 summary.sample.size %>%
   filter(method == "Peak signal identification") %>%
   View()
@@ -1139,7 +1156,7 @@ formatting.data.block.cross = output_fit_summary_cv_fin %>%
   mutate(
     method.cues = recode(
       method.cues,
-      "climwin" = "Sliding time window",
+      "climwin" = "Sliding window",
       "csp" = "Climate sensitivity profile",
       "psr" = "P-spline regression",
       'signal' = 'Peak signal detection'
@@ -1328,136 +1345,123 @@ summary_table_bc %>%
 #################################################################
 #first simulate fake data and window
 # Simulate climate data: assume daily data for 20 years
-set.seed(123)
-startyear = 1980
-years <- startyear:2020
-yday <- 365
-climate_data_simulated <- data.frame(
-  date = seq.Date(
-    from = as.Date(paste0(startyear, "-01-01")),
-    by = "day",
-    length.out = length(years) * yday
-  ),
-  temp = runif(length(years) * yday, min = 10, max = 30) # random temperatures
-)
 
-climate_data_simulated <- climate_data_simulated %>%
-  mutate(
-    year = format(date, "%Y"),
-    yday = yday(date),
-    year = as.numeric(year),
-    LONGITUDE = NA,
-    LATITUDE = NA
-  ) %>%
-  mutate(across(c(temp), scale)) %>%
-  mutate(across(c(temp), as.vector)) %>%
-  rename(TMEAN = temp)
+run.simulation = T
 
-#qs::qsave(climate_data_simulated, here::here('outputs/climate_data_simulated.qs'))
-
-# Select ~ one week in June
-june_week <- climate_data_simulated %>%
-  filter(yday >= 150 & yday <= 160)
-
-#check if previous model loaded or not
-if (!exists("statistics_absolute_climwin")) {
-  statistics_absolute_climwin <- qread(here(
-    "Application_MASTREE/outputs/statistics_absolute_climwin.qs"
-  ))
-}
-
-if (!exists("statistics_basic_method")) {
-  statistics_basic_method <- qread(here(
-    "Application_MASTREE/outputs/statistics_basic.qs"
-  ))
-}
-
-if (!exists("statistics_csp_method")) {
-  statistics_csp_method <- qread(here(
-    "Application_MASTREE/outputs/statistics_csp.qs"
-  ))
-}
-
-if (!exists("statistics_psr_method")) {
-  statistics_psr_method <- qread(here(
-    "Application_MASTREE/outputs/statistics_psr.qs"
-  ))
-}
-
-#get all parameters from real data
-raw.data.param.alpha = c(
-  statistics_absolute_climwin$intercept.estimate,
-  statistics_basic_method$intercept.estimate,
-  statistics_csp_method$intercept.estimate,
-  statistics_psr_method$intercept.estimate
-)
-raw.data.param.beta = c(
-  statistics_absolute_climwin$slope.estimate,
-  statistics_basic_method$slope.estimate,
-  statistics_csp_method$slope.estimate,
-  statistics_psr_method$slope.estimate
-)
-raw.data.param.sigma = c(
-  statistics_absolute_climwin$sigma,
-  statistics_basic_method$sigma,
-  statistics_csp_method$sigma,
-  statistics_psr_method$sigma
-)
-
-
-#generate parameter range values for the simulation
-setup.param = parameter.range(
-  raw.data.param.alpha,
-  raw.data.param.beta,
-  raw.data.param.sigma,
-  option = 'min.max'
-)
-
-# Container to store results
-results_list_fakedata = simulated_fake_bio_data(
-  fakeclimatewindow = june_week,
-  setup.param = setup.param,
-  num_simulations = 1000,
-  save_fake_data = TRUE,
-  overwrite = TRUE
-)
-
-# results_list_fakedata %>%
-#   bind_rows() %>%
-#   dplyr::select(r2.before.climwin) %>%
-#   distinct() %>%
-#   ggplot(aes(r2.before.climwin)) +
-#   geom_histogram()
-#
-# results_list_fakedata %>%
-#   bind_rows() %>%
-#   dplyr::select(sigma.random.value.setup) %>%
-#   distinct() %>%
-#   ggplot(aes(sigma.random.value.setup)) +
-#   geom_histogram()
-#
-# results_list_fakedata[[1]] %>%
-#   ggplot(aes(y = log.seed, x = TMEAN)) +
-#   geom_point() +
-#   geom_smooth(method = "lm")
-
-#you might have warning on your computer, if you are runing > 100 sim
-#started at 1.30pm
-#finished 3.45pm ! YOUHOU
-#you might have several warning in your session
-run.simulation = F
 if (run.simulation == T) {
-  result_simulations = simulation_runing_window_parallel(
-    climate_data_simulated,
-    results_list_fakedata
+  nsimulation = 10000 #takes 3 daysif 10000 sim
+  set.seed(123)
+  startyear = 1980
+  years <- startyear:2020
+  yday <- 365
+  climate_data_simulated <- data.frame(
+    date = seq.Date(
+      from = as.Date(paste0(startyear, "-01-01")),
+      by = "day",
+      length.out = length(years) * yday
+    ),
+    temp = runif(length(years) * yday, min = 10, max = 30) # random temperatures
   )
-  qs::qsave(result_simulations, here('outputs/result_simulations.qs'))
-} else {
-  result_simulations = qs::qread(here(
-    'Application_MASTREE/outputs/result_simulations.qs'
-  ))
-}
 
+  climate_data_simulated <- climate_data_simulated %>%
+    mutate(
+      year = format(date, "%Y"),
+      yday = yday(date),
+      year = as.numeric(year),
+      LONGITUDE = NA,
+      LATITUDE = NA
+    ) %>%
+    mutate(across(c(temp), scale)) %>%
+    mutate(across(c(temp), as.vector)) %>%
+    rename(TMEAN = temp)
+
+  #qs::qsave(
+  #  climate_data_simulated,
+  #  here::here('Application_MASTREE/outputs/climate_data_simulated10000.qs')
+  #)
+
+  # Select ~ one week in June
+  june_week <- climate_data_simulated %>%
+    filter(yday >= 150 & yday <= 160)
+
+  #check if previous model loaded or not
+  if (!exists("statistics_absolute_climwin")) {
+    statistics_absolute_climwin <- qread(here(
+      "Application_MASTREE/outputs/statistics_absolute_climwin.qs"
+    ))
+  }
+
+  if (!exists("statistics_basic_method")) {
+    statistics_basic_method <- qread(here(
+      "Application_MASTREE/outputs/statistics_basic.qs"
+    ))
+  }
+
+  if (!exists("statistics_csp_method")) {
+    statistics_csp_method <- qread(here(
+      "Application_MASTREE/outputs/statistics_csp.qs"
+    ))
+  }
+
+  if (!exists("statistics_psr_method")) {
+    statistics_psr_method <- qread(here(
+      "Application_MASTREE/outputs/statistics_psr.qs"
+    ))
+  }
+
+  #get all parameters from real data
+  raw.data.param.alpha = c(
+    statistics_absolute_climwin$intercept.estimate,
+    statistics_basic_method$intercept.estimate,
+    statistics_csp_method$intercept.estimate,
+    statistics_psr_method$intercept.estimate
+  )
+  raw.data.param.beta = c(
+    statistics_absolute_climwin$slope.estimate,
+    statistics_basic_method$slope.estimate,
+    statistics_csp_method$slope.estimate,
+    statistics_psr_method$slope.estimate
+  )
+  raw.data.param.sigma = c(
+    statistics_absolute_climwin$sigma,
+    statistics_basic_method$sigma,
+    statistics_csp_method$sigma,
+    statistics_psr_method$sigma
+  )
+
+  #generate parameter range values for the simulation
+  setup.param = parameter.range(
+    raw.data.param.alpha,
+    raw.data.param.beta,
+    raw.data.param.sigma,
+    option = 'min.max'
+  )
+
+  # Container to store results
+  results_list_fakedata = simulated_fake_bio_data(
+    fakeclimatewindow = june_week,
+    setup.param = setup.param,
+    num_simulations = nsimulation,
+    save_fake_data = F,
+    overwrite = F,
+    save_path = here("Application_MASTREE/outputs")
+  )
+
+  if (run.simulation == T) {
+    result_simulations = simulation_runing_window_parallel(
+      climate_data_simulated,
+      results_list_fakedata,
+      save = T
+    )
+  }
+} else {
+  #result_simulations = qs::qread(here(
+  # 'Application_MASTREE/outputs/result_simulations2025-05-22.qs'
+  #)) #here it is 5000 sim
+  result_simulations = qs::qread(here(
+    'Application_MASTREE/outputs/result_simulations2025-05-24.qs'
+  )) #last one with 10000sim and psr matrix 2,1 and not 3,1
+}
 
 #calendar for simulation study case
 calendar.sim = generate_reverse_day_calendar(
@@ -1523,7 +1527,7 @@ data.plot.sim = result_simulations %>%
     method = factor(
       recode(
         method,
-        "climwin" = "Sliding time window",
+        "climwin" = "Sliding window",
         "csp" = "Climate sensitivity profile",
         "psr" = "P-spline regression",
         'signal' = 'Peak signal detection'
@@ -1532,7 +1536,7 @@ data.plot.sim = result_simulations %>%
         "Climate sensitivity profile",
         "P-spline regression",
         'Peak signal detection',
-        "Sliding time window"
+        "Sliding window"
       ))
     ),
     windows.type = factor(
