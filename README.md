@@ -76,7 +76,7 @@ package:
 Please cite `weatheRcues` as:
 
 > Journé Valentin (2025) weatheRcues: a companion to identify weather
-> cues in seed production. R package version 0.0.1.
+> cues in seed production. R package version 0.1.0
 > <https://github.com/ValentinJourne/weatheRcues/>
 
 And for the main study reference as:
@@ -97,11 +97,14 @@ analysis, please do not hesitate to contact us.
 
 We would like to thank Martijn van de Pol, and Adrian Roberts for the
 different methods they developed. We would also like Nicolas Casajus for
-useful information related to code implementation.
+useful information related to code implementation (have a look on this
+vignette
+<https://frbcesab.github.io/rcompendium/articles/rcompendium.html> and R
+package rcompendium if you are interested)
 
 ## Main References
 
-Bailey, L.D. & De Pol, M.V. (2016). Climwin: An R Toolbox for Climate
+Bailey, L.D. & van de Pol, M. (2016). Climwin: An R Toolbox for Climate
 Window Analysis. PLoS ONE.
 
 Roberts, A.M. (2008). Exploring relationships between phenological and

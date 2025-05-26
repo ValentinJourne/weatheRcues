@@ -5,6 +5,6 @@ bibentry(
   title   = "Comparing statistical methods for detecting climatic drivers of mast seeding",
   author  = c(person("Journé Valentin")),
   year    = "2025",
-  note    = "R package version 0.0.1",
+  note    = "R package version 0.1.0",
   url     = "https://github.com/ValentinJourne/weatheRcues"
 )

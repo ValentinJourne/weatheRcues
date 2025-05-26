@@ -89,7 +89,7 @@ vignette describes the core features of the package. Additional information abou
 
 Please cite `weatheRcues` as: 
 
-> Journé Valentin (2025) weatheRcues: a companion to identify weather cues in seed production. R package version 0.0.1. 
+> Journé Valentin (2025) weatheRcues: a companion to identify weather cues in seed production. R package version 0.1.0 
 <https://github.com/ValentinJourne/weatheRcues/>
 
 And for the main study reference as: 
@@ -102,7 +102,7 @@ This code is mostly based on previous code and studies done on European beech tr
 
 ## Acknowledgments
 
-We would like to thank Martijn van de Pol, and Adrian Roberts for the different methods they developed. We would also like Nicolas Casajus for useful information related to code implementation. 
+We would like to thank Martijn van de Pol, and Adrian Roberts for the different methods they developed. We would also like Nicolas Casajus for useful information related to code implementation (have a look on this vignette https://frbcesab.github.io/rcompendium/articles/rcompendium.html and R package rcompendium if you are interested)
 
 ## Main References
 
