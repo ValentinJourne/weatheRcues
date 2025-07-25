@@ -8,7 +8,10 @@ format_climate_data(
   site = "sitename",
   path = "D/mypath",
   scale.climate = TRUE,
-  file_type = "qs"
+  file_type = "qs",
+  origin_year = 1949,
+  date_column = NULL,
+  variable_mapping = list(TMEAN = "TMEAN", TMAX = "TMAX", TMIN = "TMIN", PRP = "PRP")
 )
 }
 \arguments{
@@ -19,44 +22,63 @@ format_climate_data(
 \item{scale.climate}{Logical. Should the climate variables (\code{TMEAN}, \code{TMAX}, \code{TMIN}, \code{PRP}) be standardized? Defaults to \code{TRUE}.}
 
 \item{file_type}{Character. The file type of the climate data. Must be either \code{"qs"} or \code{"csv"}. Defaults to \code{"qs"}.}
+
+\item{origin_year}{Numeric. The origin year used in the \code{foo()} date transformation function. Defaults to \code{1949}.}
+
+\item{date_column}{Character or \code{NULL}. Name of the column containing date values. If \code{NULL}, the function attempts to auto-detect a column of class \code{Date}.}
+
+\item{variable_mapping}{Named list. A mapping between standard variable names (\code{TMEAN}, \code{TMAX}, \code{TMIN}, \code{PRP}) and the actual column names in the input file.
+Defaults to \code{list(TMEAN = "TMEAN", TMAX = "TMAX", TMIN = "TMIN", PRP = "PRP")}.}
 }
 \value{
-A \code{data.frame} containing the formatted climate data with columns:
+A \code{data.frame} containing the formatted climate data with the following columns:
 \itemize{
-\item \code{DATEB}: Original date (before transformation).
-\item \code{date}: Transformed date.
+\item \code{date}: Transformed date (via \code{foo()}).
 \item \code{yday}: Day of the year.
-\item \code{year}: Year extracted from the date.
-\item \code{TMEAN}, \code{TMAX}, \code{TMIN}, \code{PRP}: Numeric values for mean temperature, maximum temperature, minimum temperature, and precipitation, respectively.
+\item \code{year}: Extracted year from the transformed date.
+\item \code{TMEAN}, \code{TMAX}, \code{TMIN}, \code{PRP}: Standardized or raw numeric climate variables.
 }
-
-If \code{scale.climate} is \code{TRUE}, these variables are standardized.
 }
 \description{
 This function reads climate data from a specified directory for a given site, applies necessary transformations,
-and optionally scales the climate variables. The function can read files in either \code{.qs} or \code{.csv} format.
+and optionally scales the climate variables. It supports both \code{.qs} and \code{.csv} formats and can flexibly handle different
+column names for climate variables and dates.
 }
 \details{
 The function performs the following steps:
 \itemize{
-\item Reads the climate data file for the specified site using \code{qs::qread()} for \code{.qs} files or \code{readr::read_csv()} for \code{.csv} files.
-\item Converts the \code{DATEB} field to a proper date format.
-\item Applies a transformation using the \code{foo()} function (assumed to adjust the year based on an origin date of 1949).
-\item Extracts the year and day of the year (\code{yday}) from the transformed date.
-\item Converts temperature (\code{TMEAN}, \code{TMAX}, \code{TMIN}) and precipitation (\code{PRP}) variables to numeric format.
+\item Locates and loads the file matching the specified site name in the provided directory (\code{path}).
+\item Reads the file using \code{qs::qread()} for \code{.qs} or \code{readr::read_csv()} for \code{.csv}. I did not manage for now to include more format
+\item Identifies and parses the date column (using \code{date_column} or automatic detection).
+\item Renames the climate variables (\code{TMEAN}, \code{TMAX}, \code{TMIN}, \code{PRP}) according to the user-provided \code{variable_mapping}.
+\item Applies a transformation to the date using the \code{foo()} function (e.g., adjusting to a common origin year).
+\item Extracts the year and day of year (\code{yday}) from the transformed date.
+\item Converts climate variables to numeric format.
 }
 
-If \code{scale.climate} is \code{TRUE}, the climate variables (\code{TMEAN}, \code{TMAX}, \code{TMIN}, \code{PRP}) are standardized using \code{scale()}.
-The standardized values are then converted to vectors using \code{as.vector()}.
+If \code{scale.climate = TRUE}, the climate variables are standardized using \code{scale()} and converted to vectors.
 }
 \examples{
 \dontrun{
-# Format climate data for site "example_site" located at "/data/climate"
+# Example with default column names in qs format
 formatted_data <- format_climate_data(
   site = "example_site",
   path = "/data/climate",
   scale.climate = TRUE,
   file_type = "qs"
+)
+
+# Example with custom column names in CSV format
+formatted_data <- format_climate_data(
+  site = "example_site",
+  path = "/data/climate",
+  file_type = "csv",
+  variable_mapping = list(
+    TMEAN = "temperature_C_mean",
+    TMAX = "temperature_C_max",
+    TMIN = "temperature_C_min",
+    PRP = "precipitation_mm"
+  )
 )
 }
 }

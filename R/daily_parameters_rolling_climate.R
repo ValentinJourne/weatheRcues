@@ -63,6 +63,8 @@ daily_parameters_rolling_climate = function(
   }
 
   covariates.of.interest = as.character(formula_model)[3]
+  response_var <- all.vars(formula_model)[1]
+
   if (!covariates.of.interest %in% colnames(rolling.data)) {
     stop(paste("Column", covariates.of.interest, "not found in rolling.data"))
   }
@@ -92,7 +94,7 @@ daily_parameters_rolling_climate = function(
       correlation = purrr::map(
         data,
         ~ cor.test(
-          y = .$log.seed,
+          y = .[[response_var]],
           x = .[[covariates.of.interest]],
           method = method
         )$estimate
@@ -102,7 +104,7 @@ daily_parameters_rolling_climate = function(
       pvalue.cor = purrr::map(
         data,
         ~ cor.test(
-          y = .$log.seed,
+          y = .[[response_var]],
           x = .[[covariates.of.interest]],
           method = method
         )$p.value
