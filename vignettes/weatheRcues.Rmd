@@ -82,7 +82,7 @@ For the first method, I was using climwin R package. Here I customize a bit the 
 head(seed_production_simulated)
 head(climate_data_simulated)
 
-climwin.output = runing_climwin(
+climwin.output = invisible(runing_climwin(
         climate_data = climate_data_simulated,
         bio_data = seed_production_simulated,
         site.name = 'test',
@@ -91,7 +91,7 @@ climwin.output = runing_climwin(
         refday = c(01, 11),
         optionwindows = 'absolute',
         climate_var = 'temp'
-      )
+      ))
 
 climwin.output
 #in case you can change the option to give.clean = FALSE, it will give you all models outputs from `climwin::slidingwin`
