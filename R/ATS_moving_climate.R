@@ -52,7 +52,8 @@ ATS_moving_climate <- function(
   lastdays = 700,
   rollwin = 1,
   formula_model = formula('log.seed ~ TMEAN'),
-  model_type = 'lm'
+  model_type = 'lm',
+  ...
 ) {
   # Get the list of unique site names from seed data
   al.sites <- unique(bio_data_all$sitenewname)
@@ -68,7 +69,8 @@ ATS_moving_climate <- function(
     climate_data <- format_climate_data(
       site = unique(bio_data$plotname.lon.lat),
       path = climate.path,
-      scale.climate = TRUE
+      scale.climate = TRUE,
+      date_column = "DATEB"
     )
 
     # run csp site level

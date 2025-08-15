@@ -1,35 +1,10 @@
-#that was for me to make the R compendium
-#let's make my R compendium
-#remotes::install_deps()
-#https://frbcesab.github.io/rcompendium/articles/rcompendium.html
-#I sometime got issue loading new pacakge from GitHub in case
-#https://community.rstudio.com/t/unable-to-install-packages-from-github/124372
-#Sys.unsetenv("GITHUB_PAT")
-
-#library(rcompendium)
-#library(mgcv)
-#add_description(given = 'Valentin', family = 'Journé',
-#                email = 'journe.valentin@gmail.com')
-#add_license('CC BY 4.0')
-#add_readme_rmd(given = 'Valentin', family = 'Journé')
-# add_code_of_conduct(email = 'journe.valentin@gmail.com')
-# add_citation(
-#   given = 'Valentin',
-#   family = 'Journé',
-#   organisation = 'Department of Biology, Faculty of Science, Kyushu University, Fukuoka, Japan',
-#   open = TRUE,
-#   overwrite = FALSE,
-#   quiet = FALSE
-# )
-# add_dependencies('.')
-# devtools::load_all(here::here())
-# devtools::document()
-# devtools::check()
-# devtools::install()
-# report <- pkgnet::CreatePackageReport(
-#   pkg_name = "weatheRcues"
-# )
-# browseURL(report)
+####################################################
+#main review update,
+#1-change axis title x #before it was days reversed
+#2-update figure 2 main text (average r2) with window for sliding time window and updated factor order in fig
+#3-check trends in data before and after 1980
+#4-Updated figure in Supplement (still kept previous version here as commented)
+####################################################
 
 library(weatheRcues)
 library(here)
@@ -85,13 +60,15 @@ if (length(nfile$files_present) == 0) {
 calendar = generate_reverse_day_calendar(
   refday = 305, #double check later, because climwin start at 1 or 0
   lastdays = 600,
-  yearback = 2
+  yearback = 2,
+  start_year = 1949
 ) %>%
-  filter(YEAR == 1950) %>%
-  dplyr::select(MONTHab, DOY, days.reversed) %>%
+  #filter(YEAR == 1950) %>%
+  dplyr::select(MONTHab, DOY, days.reversed, DATE) %>%
+  rename(date.fake = DATE) %>%
   mutate(
-    datefake = as.Date(DOY, origin = "1948-01-01"),
-    day.month = format(datefake, "%m-%d"),
+    #datefake = as.Date(DOY, origin = "1948-01-01"),
+    day.month = format(date.fake, "%m-%d"),
     year = case_when(
       days.reversed < 366 ~ 1,
       days.reversed >= 366 & days.reversed < 730 ~ 2,
@@ -107,7 +84,6 @@ initial.data.mastree <- read.csv(
   here("Application_MASTREE/mastreedata_copy/MASTREEplus_2024-06-26_V2.csv"),
   stringsAsFactors = F
 )
-
 #Filtering data for Fagus sylvatica
 Fagus.seed = formatting_mastree_fagus(initial.data.mastree)
 
@@ -157,7 +133,8 @@ if (run.climwin == T) {
       climate_data <- weatheRcues::format_climate_data(
         site = .x,
         path = climate.beech.path,
-        scale.climate = TRUE
+        scale.climate = TRUE,
+        date_column = "DATEB"
       )
       # Run climwin per site
       weatheRcues:::runing_climwin(
@@ -196,12 +173,77 @@ climwin.dd = statistics_absolute_climwin %>%
   left_join(calendar %>% dplyr::select(MONTHab, DOY, days.reversed))
 
 
+# climwin.all.sites = climwin.dd %>%
+#   dplyr::select(sitenewname, name, days.reversed) %>%
+#   pivot_wider(names_from = "name", values_from = "days.reversed") %>%
+#   left_join(methods.collection.mv2) %>%
+#   left_join(
+#     Fagus.seed %>%
+#       dplyr::select(
+#         Country,
+#         Alpha_Number,
+#         Latitude,
+#         Longitude,
+#         plotname.lon.lat,
+#         sitenewname
+#       ) %>%
+#       distinct()
+#   ) %>%
+#   mutate(
+#     sitenewname = paste0(Country, "_", Alpha_Number, "_", round(Latitude, 4))
+#   ) %>%
+#   arrange(Collection_method) %>%
+#   mutate(
+#     sitenewname = fct_reorder(sitenewname, as.character(Collection_method))
+#   ) %>%
+#   ggplot() +
+#   geom_segment(
+#     aes(
+#       y = window.open,
+#       yend = window.close,
+#       x = sitenewname,
+#       col = Collection_method
+#     ),
+#     linewidth = 2
+#   ) +
+#   coord_flip() +
+#   geom_hline(yintercept = 133, color = 'black', linetype = 'dashed') +
+#   geom_hline(yintercept = 498, color = 'black', linetype = 'dashed') +
+#   ylim(0, 600) +
+#   scale_color_futurama() +
+#   scale_fill_futurama() +
+#   ggpubr::theme_cleveland() +
+#   theme(legend.position = 'bottom', legend.title = element_blank()) +
+#   ylab('Days before seed fall (0 = Nov 1 of seed-fall year).')
+
 climwin.all.sites = climwin.dd %>%
   dplyr::select(sitenewname, name, days.reversed) %>%
   pivot_wider(names_from = "name", values_from = "days.reversed") %>%
   left_join(methods.collection.mv2) %>%
+  left_join(
+    statistics_absolute_climwin %>%
+      dplyr::select(sitenewname, slope.estimate, r2)
+  ) %>%
+  ungroup() %>%
+  arrange(Collection_method) %>%
+  left_join(
+    Fagus.seed %>%
+      dplyr::select(
+        Country,
+        Alpha_Number,
+        Latitude,
+        Longitude,
+        plotname.lon.lat,
+        sitenewname
+      ) %>%
+      distinct()
+  ) %>%
   mutate(
-    sitenewname = fct_reorder(sitenewname, as.character(Collection_method))
+    sitenewname = paste0(Country, "_", round(Latitude, 4))
+  ) %>%
+  arrange(Collection_method) %>%
+  mutate(
+    sitenewname = fct_reorder(sitenewname, Latitude)
   ) %>%
   ggplot() +
   geom_segment(
@@ -209,20 +251,34 @@ climwin.all.sites = climwin.dd %>%
       y = window.open,
       yend = window.close,
       x = sitenewname,
-      col = Collection_method
+      col = slope.estimate
     ),
     linewidth = 2
   ) +
+  facet_grid(Collection_method ~ ., scale = "free") +
   coord_flip() +
   geom_hline(yintercept = 133, color = 'black', linetype = 'dashed') +
   geom_hline(yintercept = 498, color = 'black', linetype = 'dashed') +
   ylim(0, 600) +
-  scale_color_futurama() +
-  scale_fill_futurama() +
   ggpubr::theme_cleveland() +
-  theme(legend.position = 'bottom', legend.title = element_blank()) +
-  ylab('Days reversed')
-
+  scale_color_viridis_c(
+    option = "mako",
+    limits = c(0, 0.7)
+  ) +
+  scale_color_gradient2(
+    low = "blue",
+    mid = "white", # Color for the midpoint
+    high = "red",
+    midpoint = 0
+  ) +
+  labs(colour = "Slope (std)") +
+  theme(
+    legend.position = 'right',
+    #legend.title = element_blank(),
+    panel.background = element_rect(fill = 'white', colour = 'white')
+  ) +
+  ylab('Days before seed fall (0 = Nov 1 of seed-fall year).')
+climwin.all.sites
 cowplot::save_plot(
   here("Application_MASTREE/figures/climwin.all.png"),
   climwin.all.sites,
@@ -294,15 +350,72 @@ quibble2(output_fit_summary.best.csp$window.close, q = c(0.25, 0.5, 0.75))
 quibble2(statistics_csp_method$window.open, q = c(0.25, 0.5, 0.75))
 quibble2(statistics_csp_method$window.close, q = c(0.25, 0.5, 0.75))
 
+#previous version
+# csp.all.sites = output_fit_summary.best.csp %>%
+#   left_join(methods.collection.mv2) %>%
+#   ungroup() %>%
+#   arrange(Collection_method) %>%
+#   left_join(
+#     Fagus.seed %>%
+#       dplyr::select(
+#         Country,
+#         Alpha_Number,
+#         Latitude,
+#         Longitude,
+#         plotname.lon.lat,
+#         sitenewname
+#       ) %>%
+#       distinct()
+#   ) %>%
+#   mutate(
+#     sitenewname = paste0(Country, "_", Alpha_Number, "_", round(Latitude, 4))
+#   ) %>%
+#   arrange(Collection_method) %>%
+#   mutate(
+#     sitenewname = fct_reorder(sitenewname, as.character(Collection_method))
+#   ) %>%
+#   ggplot() +
+#   geom_segment(
+#     aes(
+#       y = window.open,
+#       yend = window.close,
+#       x = sitenewname,
+#       col = Collection_method
+#     ),
+#     linewidth = 2
+#   ) +
+#   coord_flip() +
+#   geom_hline(yintercept = 133, color = 'black', linetype = 'dashed') +
+#   geom_hline(yintercept = 498, color = 'black', linetype = 'dashed') +
+#   ylim(0, 600) +
+#   scale_color_futurama() +
+#   scale_fill_futurama() +
+#   ggpubr::theme_cleveland() +
+#   theme(legend.position = 'bottom', legend.title = element_blank()) +
+#   ylab('Days before seed fall (0 = Nov 1 of seed-fall year).')
+
 csp.all.sites = output_fit_summary.best.csp %>%
   left_join(methods.collection.mv2) %>%
   ungroup() %>%
   arrange(Collection_method) %>%
+  left_join(
+    Fagus.seed %>%
+      dplyr::select(
+        Country,
+        Alpha_Number,
+        Latitude,
+        Longitude,
+        plotname.lon.lat,
+        sitenewname
+      ) %>%
+      distinct()
+  ) %>%
   mutate(
-    sitenewname = forcats::fct_reorder(
-      sitenewname,
-      as.character(Collection_method)
-    )
+    sitenewname = paste0(Country, "_", round(Latitude, 4))
+  ) %>%
+  arrange(Collection_method) %>%
+  mutate(
+    sitenewname = fct_reorder(sitenewname, Latitude)
   ) %>%
   ggplot() +
   geom_segment(
@@ -310,19 +423,33 @@ csp.all.sites = output_fit_summary.best.csp %>%
       y = window.open,
       yend = window.close,
       x = sitenewname,
-      col = Collection_method
+      col = slope.estimate
     ),
     linewidth = 2
   ) +
+  facet_grid(Collection_method ~ ., scale = "free") +
   coord_flip() +
   geom_hline(yintercept = 133, color = 'black', linetype = 'dashed') +
   geom_hline(yintercept = 498, color = 'black', linetype = 'dashed') +
   ylim(0, 600) +
-  scale_color_futurama() +
-  scale_fill_futurama() +
   ggpubr::theme_cleveland() +
-  theme(legend.position = 'bottom', legend.title = element_blank()) +
-  ylab('Days reversed')
+  scale_color_viridis_c(
+    option = "mako",
+    limits = c(0, 0.7)
+  ) +
+  scale_color_gradient2(
+    low = "blue",
+    mid = "white", # Color for the midpoint
+    high = "red",
+    midpoint = 0
+  ) +
+  labs(colour = "Slope (std)") +
+  theme(
+    legend.position = 'right',
+    #legend.title = element_blank(),
+    panel.background = element_rect(fill = 'white', colour = 'white')
+  ) +
+  ylab('Days before seed fall (0 = Nov 1 of seed-fall year).')
 csp.all.sites
 
 cowplot::save_plot(
@@ -365,13 +492,69 @@ quibble2(output_fit_summary.basic.best$window.open, q = c(0.25, 0.5, 0.75))
 quibble2(output_fit_summary.basic.best$window.close, q = c(0.25, 0.5, 0.75))
 
 #now make the figure
+# basic.all.sites = output_fit_summary.basic.best %>%
+#   left_join(methods.collection.mv2) %>%
+#   left_join(
+#     Fagus.seed %>%
+#       dplyr::select(
+#         Country,
+#         Alpha_Number,
+#         Latitude,
+#         Longitude,
+#         plotname.lon.lat,
+#         sitenewname
+#       ) %>%
+#       distinct()
+#   ) %>%
+#   mutate(
+#     sitenewname = paste0(Country, "_", Alpha_Number, "_", round(Latitude, 4))
+#   ) %>%
+#   arrange(Collection_method) %>%
+#   mutate(
+#     sitenewname = fct_reorder(sitenewname, as.character(Collection_method))
+#   ) %>%
+#   ggplot() +
+#   geom_segment(
+#     aes(
+#       y = window.open,
+#       yend = window.close,
+#       x = sitenewname,
+#       col = Collection_method
+#     ),
+#     size = 2
+#   ) +
+#   coord_flip() +
+#   geom_hline(yintercept = 133, color = 'black', linetype = 'dashed') +
+#   geom_hline(yintercept = 498, color = 'black', linetype = 'dashed') +
+#   ylim(0, 600) +
+#   scale_color_futurama() +
+#   scale_fill_futurama() +
+#   ggpubr::theme_cleveland() +
+#   theme(legend.position = 'bottom', legend.title = element_blank()) +
+#   ylab('Days before seed fall (0 = Nov 1 of seed-fall year).')
+
 basic.all.sites = output_fit_summary.basic.best %>%
   left_join(methods.collection.mv2) %>%
+  ungroup() %>%
+  arrange(Collection_method) %>%
+  left_join(
+    Fagus.seed %>%
+      dplyr::select(
+        Country,
+        Alpha_Number,
+        Latitude,
+        Longitude,
+        plotname.lon.lat,
+        sitenewname
+      ) %>%
+      distinct()
+  ) %>%
   mutate(
-    sitenewname = forcats::fct_reorder(
-      sitenewname,
-      as.character(Collection_method)
-    )
+    sitenewname = paste0(Country, "_", round(Latitude, 4))
+  ) %>%
+  arrange(Collection_method) %>%
+  mutate(
+    sitenewname = fct_reorder(sitenewname, Latitude)
   ) %>%
   ggplot() +
   geom_segment(
@@ -379,19 +562,33 @@ basic.all.sites = output_fit_summary.basic.best %>%
       y = window.open,
       yend = window.close,
       x = sitenewname,
-      col = Collection_method
+      col = slope.estimate
     ),
-    size = 2
+    linewidth = 2
   ) +
+  facet_grid(Collection_method ~ ., scale = "free") +
   coord_flip() +
   geom_hline(yintercept = 133, color = 'black', linetype = 'dashed') +
   geom_hline(yintercept = 498, color = 'black', linetype = 'dashed') +
   ylim(0, 600) +
-  scale_color_futurama() +
-  scale_fill_futurama() +
   ggpubr::theme_cleveland() +
-  theme(legend.position = 'bottom', legend.title = element_blank()) +
-  ylab('Days reversed')
+  scale_color_viridis_c(
+    option = "mako",
+    limits = c(0, 0.7)
+  ) +
+  scale_color_gradient2(
+    low = "blue",
+    mid = "white", # Color for the midpoint
+    high = "red",
+    midpoint = 0
+  ) +
+  labs(colour = "Slope (std)") +
+  theme(
+    legend.position = 'right',
+    #legend.title = element_blank(),
+    panel.background = element_rect(fill = 'white', colour = 'white')
+  ) +
+  ylab('Days before seed fall (0 = Nov 1 of seed-fall year).')
 basic.all.sites
 cowplot::save_plot(
   here("Application_MASTREE/figures/peak.detection.all.png"),
@@ -433,15 +630,78 @@ output_fit_summary.psr.best = statistics_psr_method %>%
 quibble2(output_fit_summary.psr.best$window.close, q = c(0.25, 0.5, 0.75))
 quibble2(output_fit_summary.psr.best$window.open, q = c(0.25, 0.5, 0.75))
 
+#in the previous version
+# psr.all.sites = output_fit_summary.psr.best %>%
+#   left_join(methods.collection.mv2) %>%
+#   ungroup() %>%
+#   arrange(Collection_method) %>%
+#   left_join(
+#     Fagus.seed %>%
+#       dplyr::select(
+#         Country,
+#         Alpha_Number,
+#         Latitude,
+#         Longitude,
+#         plotname.lon.lat,
+#         sitenewname
+#       ) %>%
+#       distinct()
+#   ) %>%
+#   mutate(
+#     sitenewname = paste0(Country, "_", Alpha_Number, "_", round(Latitude, 4))
+#   ) %>%
+#   arrange(Collection_method) %>%
+#   mutate(
+#     sitenewname = fct_reorder(sitenewname, as.character(Collection_method))
+#   ) %>%
+#   ggplot() +
+#   geom_segment(
+#     aes(
+#       y = window.open,
+#       yend = window.close,
+#       x = sitenewname,
+#       col = Collection_method
+#     ),
+#     size = 2
+#   ) +
+#   geom_point(
+#     aes(y = window.open, x = sitenewname, col = Collection_method),
+#     size = 2,
+#     shape = 15
+#   ) +
+#   coord_flip() +
+#   geom_hline(yintercept = 133, color = 'black', linetype = 'dashed') +
+#   geom_hline(yintercept = 498, color = 'black', linetype = 'dashed') +
+#   ylim(0, 600) +
+#   scale_color_futurama() +
+#   scale_fill_futurama() +
+#   ggpubr::theme_cleveland() +
+#   theme(legend.position = 'bottom', legend.title = element_blank()) +
+#   ylab('Days before seed fall (0 = Nov 1 of seed-fall year).')
+# psr.all.sites
+
 psr.all.sites = output_fit_summary.psr.best %>%
   left_join(methods.collection.mv2) %>%
   ungroup() %>%
   arrange(Collection_method) %>%
+  left_join(
+    Fagus.seed %>%
+      dplyr::select(
+        Country,
+        Alpha_Number,
+        Latitude,
+        Longitude,
+        plotname.lon.lat,
+        sitenewname
+      ) %>%
+      distinct()
+  ) %>%
   mutate(
-    sitenewname = forcats::fct_reorder(
-      sitenewname,
-      as.character(Collection_method)
-    )
+    sitenewname = paste0(Country, "_", round(Latitude, 4))
+  ) %>%
+  arrange(Collection_method) %>%
+  mutate(
+    sitenewname = fct_reorder(sitenewname, Latitude)
   ) %>%
   ggplot() +
   geom_segment(
@@ -449,24 +709,33 @@ psr.all.sites = output_fit_summary.psr.best %>%
       y = window.open,
       yend = window.close,
       x = sitenewname,
-      col = Collection_method
+      col = slope.estimate
     ),
-    size = 2
+    linewidth = 2
   ) +
-  geom_point(
-    aes(y = window.open, x = sitenewname, col = Collection_method),
-    size = 2,
-    shape = 15
-  ) +
+  facet_grid(Collection_method ~ ., scale = "free") +
   coord_flip() +
   geom_hline(yintercept = 133, color = 'black', linetype = 'dashed') +
   geom_hline(yintercept = 498, color = 'black', linetype = 'dashed') +
   ylim(0, 600) +
-  scale_color_futurama() +
-  scale_fill_futurama() +
   ggpubr::theme_cleveland() +
-  theme(legend.position = 'bottom', legend.title = element_blank()) +
-  ylab('Days reversed')
+  scale_color_viridis_c(
+    option = "mako",
+    limits = c(0, 0.7)
+  ) +
+  scale_color_gradient2(
+    low = "blue",
+    mid = "white", # Color for the midpoint
+    high = "red",
+    midpoint = 0
+  ) +
+  labs(colour = "Slope (std)") +
+  theme(
+    legend.position = 'right',
+    #legend.title = element_blank(),
+    panel.background = element_rect(fill = 'white', colour = 'white')
+  ) +
+  ylab('Days before seed fall (0 = Nov 1 of seed-fall year).')
 psr.all.sites
 
 cowplot::save_plot(
@@ -531,10 +800,10 @@ median.windows.plot = windows.avg %>%
     method = factor(
       method,
       levels = rev(c(
-        "Climate sensitivity profile",
-        "P-spline regression",
+        "Sliding window",
         "Peak signal detection",
-        "Sliding window"
+        "Climate sensitivity profile",
+        "P-spline regression"
       ))
     ),
     windows.type = factor(
@@ -569,7 +838,7 @@ median.windows.plot = windows.avg %>%
   ) +
   coord_flip() +
   xlab('') +
-  ylab('Days reversed') +
+  ylab('Days before seed fall (0 = Nov 1 of seed-fall year).') +
   scale_color_manual(values = c("Open" = "#56B4E9", "Close" = "#D55E00")) +
   scale_shape_manual(values = c("Open" = 15, "Close" = 19)) +
   ggpubr::theme_pubr() +
@@ -682,11 +951,96 @@ cowplot::save_plot(
     median.windows.plot +
     plot_annotation(tag_levels = 'a') &
     theme(plot.tag = element_text(size = 12)),
-  ncol = 1.8,
+  ncol = 1.9,
   nrow = 1.4,
   dpi = 300
 )
 
+###################
+CSP.performance.plot = climwin.dd %>%
+  dplyr::select(sitenewname, name, days.reversed) %>%
+  pivot_wider(names_from = "name", values_from = "days.reversed") %>%
+  left_join(methods.collection.mv2) %>%
+  left_join(
+    statistics_absolute_climwin %>%
+      dplyr::select(sitenewname, slope.estimate, r2)
+  ) %>%
+  rename(`R2 sliding \nwindow` = r2) %>%
+  rename(`Slope (Std) \nsliding window` = slope.estimate) %>%
+  left_join(
+    Fagus.seed %>%
+      dplyr::select(
+        Country,
+        Alpha_Number,
+        Latitude,
+        Longitude,
+        plotname.lon.lat,
+        sitenewname,
+        n
+      ) %>%
+      distinct()
+  ) %>%
+  mutate(
+    sitenewname = paste0(round(Latitude, 4), '_(N=', n, ")") #Country, "_",
+  ) %>%
+  arrange(Collection_method) %>%
+  mutate(
+    sitenewname = fct_reorder(sitenewname, Latitude)
+  ) %>%
+  ggplot() +
+  geom_segment(
+    aes(
+      y = window.open,
+      yend = window.close,
+      x = sitenewname,
+      col = `Slope (Std) \nsliding window`
+      #alpha = `R2 sliding \nwindow`,
+    ),
+    linewidth = 2
+  ) +
+  coord_flip() +
+  geom_hline(yintercept = 133, color = 'black', linetype = 'dashed') +
+  geom_hline(yintercept = 498, color = 'black', linetype = 'dashed') +
+  ylim(0, 600) +
+  ggpubr::theme_cleveland() +
+  #scale_color_viridis_c(option = "mako") +
+  scale_color_gradient2(
+    low = "blue", # Color for low values
+    mid = "white", # Color for the midpoint
+    high = "red", # Color for high values
+    midpoint = 0 # Set the midpoint at data value 0
+  ) +
+  theme(
+    legend.position = 'right',
+    #legend.title = element_blank(),
+    panel.background = element_rect(fill = 'white', colour = 'white')
+  ) +
+  ylab('Days before seed fall (0 = Nov 1 of seed-fall year).')
+CSP.performance.plot
+
+cowplot::save_plot(
+  here("Application_MASTREE/figures/averager2.method.png"),
+  ((averagedensr2method +
+    median.windows.plot) /
+    CSP.performance.plot) +
+    plot_annotation(tag_levels = 'a') &
+    theme(plot.tag = element_text(size = 12)),
+  ncol = 2.2,
+  nrow = 3.,
+  dpi = 300
+)
+
+cowplot::save_plot(
+  here::here("Application_MASTREE/figures/averager2.method.png"),
+  ((averagedensr2method + median.windows.plot) /
+    CSP.performance.plot +
+    plot_layout(heights = c(.7, 1))) + # <-- Adjust this ratio
+    plot_annotation(tag_levels = 'a') &
+    theme(plot.tag = element_text(size = 12)),
+  ncol = 2.2,
+  nrow = 3,
+  dpi = 300
+)
 #################################################################
 #################################################################
 #############Evaluation of time series length on cue identification
@@ -746,12 +1100,13 @@ if (dont.run.this.long.process == F) {
   qs::qsave(
     result_list,
     here(paste0(
-      "Application_MASTREE/outputs/year.selection.testing.",
+      "Application_MASTREE/outputs/year.selection.testing",
       today(),
       ".qs"
     ))
   )
 } else {
+  #I am loading the last longest version...
   result_list = qs::qread(here(
     "Application_MASTREE/outputs/year.selection.testing.2025-05-20.qs"
   ))
@@ -855,6 +1210,17 @@ sensi.data.plot = summary.sample.size %>%
       levels = c("Close", "Open")
     )
   ) %>%
+  mutate(
+    method = factor(
+      method,
+      levels = c(
+        "Sliding window",
+        "Peak signal detection",
+        "Climate sensitivity profile",
+        "P-spline regression"
+      )
+    )
+  ) %>%
   ggplot(aes(
     x = sample_fraction_factor,
     group = windows.type,
@@ -889,7 +1255,7 @@ sensi.data.plot = summary.sample.size %>%
   ) +
   facet_wrap(. ~ method, scales = 'free_y') +
   xlab('') +
-  ylab('Days reversed') +
+  ylab('Days before seed fall (0 = Nov 1 of seed-fall year).') +
   theme(legend.position = 'bottom', legend.title = element_blank()) +
   geom_hline(yintercept = 498, color = 'black', linetype = 'dashed') +
   scale_color_manual(values = c("Open" = "#56B4E9", "Close" = "#D55E00")) +
@@ -1009,7 +1375,8 @@ if (dont.run.block.cross.becausetoolong == F) {
       climate_data <- format_climate_data(
         site = beech.site.all.5method[i],
         path = climate.beech.path,
-        scale.climate = T
+        scale.climate = T,
+        date_column = "DATEB"
       )
 
       # Run climwin per site
@@ -1175,6 +1542,17 @@ formatting.data.block.cross %>%
 #make figure
 block.cross.figure =
   formatting.data.block.cross %>%
+  mutate(
+    method.cues = factor(
+      method.cues,
+      levels = c(
+        "Sliding window",
+        "Peak signal detection",
+        "Climate sensitivity profile",
+        "P-spline regression"
+      )
+    )
+  ) %>%
   ggplot(aes(
     x = Collection_method,
     y = r2.validation,
@@ -1229,6 +1607,17 @@ cowplot::save_plot(
 
 block.cross.figure.mae =
   formatting.data.block.cross %>%
+  mutate(
+    method.cues = factor(
+      method.cues,
+      levels = c(
+        "Sliding window",
+        "Peak signal detection",
+        "Climate sensitivity profile",
+        "P-spline regression"
+      )
+    )
+  ) %>%
   ggplot(aes(
     x = Collection_method,
     y = scaled.rmse,
@@ -1347,7 +1736,7 @@ summary_table_bc %>%
 #first simulate fake data and window
 # Simulate climate data: assume daily data for 20 years
 
-run.simulation = T
+run.simulation = F
 
 if (run.simulation == T) {
   nsimulation = 10000 #takes 3 daysif 10000 sim
@@ -1603,7 +1992,18 @@ result_simulations %>%
 
 #now the figures
 sim.wind = ggplot(
-  data.plot.sim,
+  data.plot.sim %>%
+    mutate(
+      method = factor(
+        method,
+        levels = rev(c(
+          "Sliding window",
+          "Peak signal detection",
+          "Climate sensitivity profile",
+          "P-spline regression"
+        ))
+      )
+    ),
   aes(
     x = method,
     group = windows.type,
@@ -1631,7 +2031,7 @@ sim.wind = ggplot(
   coord_flip() +
   facet_wrap(. ~ r2_category, ncol = 2) +
   xlab('') +
-  ylab('Days reversed') +
+  ylab('Days before seed fall (0 = Nov 1 of seed-fall year).') +
   scale_color_manual(values = c("Open" = "black", "Close" = "#009E73")) +
   scale_shape_manual(values = c("Open" = 15, "Close" = 19)) +
   ggpubr::theme_pubr() +
@@ -1703,3 +2103,50 @@ result_simulations %>%
     perc_correct_open = round(100 * n_correct_open / n_total, 1),
     .groups = "drop"
   )
+
+
+#for revision
+#check CV trends
+Fagus.seed %>%
+  group_by(Year) %>%
+  summarise(n_sites = n_distinct(plotname.lon.lat)) %>%
+  ggplot(aes(x = Year, y = n_sites)) +
+  geom_line(color = "steelblue", size = 1)
+
+Fagus.seed %>%
+  group_by(Year) %>%
+  summarise(
+    mean = mean(log.seed, na.rm = TRUE),
+    sd = sd(log.seed, na.rm = TRUE),
+    n = n()
+  ) %>%
+  mutate(CV = sd / mean) %>%
+  ggplot(aes(x = Year, y = CV)) +
+  #geom_point(aes(size = n)) +
+  geom_line() +
+  scale_size_continuous(name = "Number of sites")
+
+model.checing.cv <- Fagus.seed %>%
+  group_by(Year) %>%
+  summarise(
+    mean = mean(log.seed, na.rm = TRUE),
+    sd = sd(log.seed, na.rm = TRUE),
+    n = n()
+  ) %>%
+  mutate(CV = sd / mean) %>%
+  lm(CV ~ Year + n, data = .)
+
+summary(model.checing.cv)
+
+Fagus.seed %>%
+  group_by(plotname.lon.lat) %>%
+  mutate(log.seed.scaled = scale(log.seed)) %>%
+  ungroup() %>%
+  group_by(Year) %>%
+  summarise(
+    mean_scaled = mean(log.seed.scaled, na.rm = TRUE),
+    sd_scaled = sd(log.seed.scaled, na.rm = TRUE)
+  ) %>%
+  mutate(CV_scaled = sd_scaled / mean_scaled) %>%
+  ggplot(aes(x = Year, y = CV_scaled)) +
+  geom_line(col = "red")

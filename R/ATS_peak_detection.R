@@ -67,7 +67,8 @@ ATS_peak_detection <- function(
   climate_data <- format_climate_data(
     site = unique(data.sub$plotname.lon.lat),
     path = climate.path,
-    scale.climate = TRUE
+    scale.climate = TRUE,
+    date_column = "DATEB"
   )
 
   # Run the CSP site analysis function

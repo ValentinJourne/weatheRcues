@@ -11,7 +11,8 @@ ATS_moving_climate(
   lastdays = 700,
   rollwin = 1,
   formula_model = formula("log.seed ~ TMEAN"),
-  model_type = "lm"
+  model_type = "lm",
+  ...
 )
 }
 \arguments{

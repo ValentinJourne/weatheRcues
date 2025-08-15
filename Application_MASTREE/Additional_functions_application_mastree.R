@@ -332,7 +332,8 @@ run_sampling_fraction_all_methods <- function(
         climate_data <- format_climate_data(
           site = .x,
           path = climate.path,
-          scale.climate = TRUE
+          scale.climate = TRUE,
+          date_column = "DATEB"
         )
 
         seed_subset <- seed.data %>%
