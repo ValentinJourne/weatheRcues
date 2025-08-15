@@ -29,7 +29,9 @@ including methods adapted from Simmonds et al. and Thackeray et al., now
 fully accessible through R code. This work is part of an ongoing study.
 **Disclaimer**, `weatheRcues` is not a formal R package, but rather a
 research compendium - organized with predefined files, folders
-structures, functions in order to support reproducible research.
+structures, functions in order to support reproducible research. (Note
+that you can still install “it” as a package if you want to use the
+function for your own, please check the vignette below).
 
 ## Features
 
@@ -61,8 +63,6 @@ library("weatheRcues")
 
 ## Get started
 
-## Long-form documentations
-
 `weatheRcues` provides for now one vignette to learn more about the
 package:
 
@@ -82,8 +82,9 @@ Please cite `weatheRcues` as:
 And for the main study reference as:
 
 > Journé Valentin, Emily G. Simmonds, Maciej Barczyk, Michał Bogdziewicz
-> (2025) Comparing statistical methods for detecting climatic drivers of
-> mast seeding
+> (2025) Comparing statistical methods for detecting weather cues of
+> mast seeding in European beech (Fagus sylvatica) across Europe.
+> Preprint: <https://ecoevorxiv.org/repository/view/9420/>
 
 ## Contributing
 
