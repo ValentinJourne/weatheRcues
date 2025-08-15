@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# weatheRcues <img src="man/figures/icon.jpeg" align="right" style="float:right; height:120px;"/>
+# weatheRcues <img src="man/figures/logo2.png" align="right" style="float:right; height:120px;"/>
 
 <!-- badges: start -->
 
